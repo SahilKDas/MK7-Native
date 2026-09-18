@@ -28,6 +28,31 @@ Zig was considered, but until Zig has those vtables thingy, nope.
 
 ---
 
+## 🚀 Building
+
+MK7-Native currently requires CMake 3.25+, Ninja, and a compiler with C++26
+language-mode support.
+
+```sh
+cmake --preset default
+cmake --build --preset default
+ctest --preset default
+```
+
+The first available tool is `mk7-inspect`, a small file-signature inspector for
+the Nintendo and Mario Kart 7 formats that will underpin the asset pipeline:
+
+```sh
+./build/default/mk7-inspect path/to/archive.szs
+```
+
+> [!IMPORTANT]
+> Never commit game ROMs, extracted assets, encryption keys, or other
+> copyrighted game data. MK7-Native is developed from independently written
+> code and user-supplied game data.
+
+---
+
 ## 💬 Community & Discussion
 
 Want to talk about the decompilation progress, modern C++ patterns, or track reversing? Join the Discord server:

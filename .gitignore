@@ -1,0 +1,12 @@
+/build/
+/out/
+/.cache/
+
+# Locally owned game data must never be committed.
+/rom/
+/assets/
+*.3ds
+*.cia
+*.cxi
+*.romfs
+*.exefs
