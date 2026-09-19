@@ -31,14 +31,18 @@ cmake --build --preset default
 
 ## Local workflow
 
-Use `ctrtool` to extract and decompress the ExeFS code from a legally obtained
-CIA. Keep all inputs and outputs outside version control.
+Point the tools at a legally obtained CIA wherever it already lives. Do not
+copy the CIA into this repository: ctrtool reads it in place and extracts
+only the much smaller executable image into a temporary/ignored directory.
 
 ```powershell
-ctrtool --decompresscode --exefsdir=build/exefs path/to/game.cia
+$MK7_CIA = "C:/path/to/your/game.cia"
+$MK7_EXEFS = "$env:TEMP/mk7-native-exefs"
+
+ctrtool --decompresscode --exefsdir=$MK7_EXEFS $MK7_CIA
 
 build/default/mk7-recompile.exe `
-  --input build/exefs/code.bin `
+  --input "$MK7_EXEFS/code.bin" `
   --output generated/usa_rev2/entry.cpp `
   --image-base 0x00100000 `
   --start 0x00100000 `
@@ -57,15 +61,16 @@ cmake -S . -B build/native -G Ninja `
   -DMK7_NATIVE_GENERATED_ENTRY="$PWD/generated/usa_rev2/entry.cpp"
 cmake --build build/native --target mk7-run
 
-build/native/mk7-run.exe path/to/game.cia --ctrtool path/to/ctrtool.exe
+build/native/mk7-run.exe "$MK7_CIA" --ctrtool path/to/ctrtool.exe
 ```
 
 `mk7-run` currently supports the verified USA Rev2 image. It computes SHA-512
-over the complete CIA, rejects any other image, extracts ExeFS into a temporary
-directory, initializes the 64 MiB CTR application memory map, executes the
+over the complete CIA at the supplied path, rejects any other image, extracts
+ExeFS into a temporary directory, initializes the 64 MiB CTR application memory map, executes the
 native entry block, and exercises the fail-closed SVC dispatcher. The current
 entry closure stops safely when it reaches the next unregistered guest block;
 it does not yet boot game UI or gameplay.
+
 ## Next correctness gates
 
 1. Add ARMv6K decode and semantic tests for instructions absent from ARMv5TE.

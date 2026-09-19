@@ -55,6 +55,9 @@ the Nintendo and Mario Kart 7 formats that will underpin the asset pipeline:
 See [Static recompilation](docs/RECOMPILATION.md) for the local ROM-to-C++
 workflow, current architecture limits, and correctness gates.
 
+The game CIA remains wherever the user stores it; pass its absolute path to
+`mk7-run`. MK7-Native never copies the full ROM into the source or build tree.
+
 ---
 
 ## 💬 Community & Discussion
