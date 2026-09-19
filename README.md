@@ -34,6 +34,7 @@ MK7-Native currently requires CMake 3.25+, Ninja, and a compiler with C++26
 language-mode support.
 
 ```sh
+git submodule update --init
 cmake --preset default
 cmake --build --preset default
 ctest --preset default
@@ -50,6 +51,9 @@ the Nintendo and Mario Kart 7 formats that will underpin the asset pipeline:
 > Never commit game ROMs, extracted assets, encryption keys, or other
 > copyrighted game data. MK7-Native is developed from independently written
 > code and user-supplied game data.
+
+See [Static recompilation](docs/RECOMPILATION.md) for the local ROM-to-C++
+workflow, current architecture limits, and correctness gates.
 
 ---
 

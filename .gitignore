@@ -1,6 +1,7 @@
 /build/
 /out/
 /.cache/
+/generated/
 
 # Locally owned game data must never be committed.
 /rom/
