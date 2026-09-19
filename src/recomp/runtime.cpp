@@ -1,85 +1,37 @@
 #include <mk7/recomp/runtime.hpp>
-
+#include <algorithm>
+#include <bit>
+#include <cstring>
 #include <iostream>
 #include <vector>
-
-ArmCpuState g_cpu{};
-std::array<std::uint64_t, 2> g_insn_count{};
-unsigned g_nds_active = NDS_ARM9;
-bool g_insn_hook_armed = false;
-
-namespace {
-
-std::span<std::byte> g_memory;
-std::vector<std::uint32_t> g_return_stack;
-bool g_unwinding = false;
-std::uint32_t g_last_svc = 0xffffffffu;
-std::uint32_t g_last_dispatch = 0xffffffffu;
-
-} // namespace
-
-void ctr_runtime_initialize(std::span<std::byte> memory) {
-    g_memory = memory;
-    ctr_runtime_reset();
+ArmCpuState g_cpu{}; std::array<std::uint64_t,2> g_insn_count{}; bool g_insn_hook_armed=false;
+namespace { std::span<std::byte> mem; std::vector<std::uint32_t> returns; bool unwind=false; std::uint32_t svc=~0u,dispatch=~0u,exclusive=~0u; struct {std::uint32_t control{},tls{},ttbr0{},dacr{};} cp15;
+const CtrGeneratedFunction* lookup(std::uint32_t target){auto a=target&~1u;for(std::size_t i=0;i<mk7_generated_function_count;++i)if(mk7_generated_functions[i].address==a&&mk7_generated_functions[i].thumb==bool(target&1))return &mk7_generated_functions[i];return nullptr;}
+template<class T>T read(std::uint32_t a){T v{};if(std::uint64_t(a)+sizeof(T)<=mem.size())std::memcpy(&v,mem.data()+a,sizeof v);else unwind=true;return v;}
+template<class T>void write(std::uint32_t a,T v){if(std::uint64_t(a)+sizeof(T)<=mem.size())std::memcpy(mem.data()+a,&v,sizeof v);else unwind=true;exclusive=~0u;}
 }
-
-void ctr_runtime_reset() {
-    g_cpu = {};
-    g_cpu.cpsr = 0x10u;
-    g_insn_count = {};
-    g_return_stack.clear();
-    g_unwinding = false;
-    g_last_svc = 0xffffffffu;
-    g_last_dispatch = 0xffffffffu;
-}
-
-auto ctr_runtime_last_svc() noexcept -> std::uint32_t { return g_last_svc; }
-auto ctr_runtime_last_dispatch() noexcept -> std::uint32_t { return g_last_dispatch; }
-auto runtime_should_yield() noexcept -> bool { return false; }
-auto runtime_unwinding() noexcept -> bool { return g_unwinding; }
-void runtime_insn_slow() noexcept {}
-
-void runtime_call_push_return(std::uint32_t address) noexcept {
-    g_return_stack.push_back(address);
-}
-
-void runtime_call_cancel_return(std::uint32_t address) noexcept {
-    if (!g_return_stack.empty() && g_return_stack.back() == address) {
-        g_return_stack.pop_back();
-    }
-}
-
-void runtime_tick(std::uint32_t) noexcept {}
-
-void runtime_link_call(NdsLinkSlot* slot) noexcept {
-    g_last_dispatch = slot->target;
-    g_unwinding = true;
-    std::cout << "[ctr] deferred dispatch to unregistered guest block 0x"
-              << std::hex << slot->target << std::dec << '\n';
-}
-
-void runtime_swi(std::uint32_t number) noexcept {
-    g_last_svc = number;
-    // Unknown services return a normal CTR failure Result in R0. The dispatcher
-    // never throws or dereferences guest pointers until a service is modeled.
-    g_cpu.R[0] = 0xd8e007f7u;
-    std::cout << "[ctr:srv] SVC 0x" << std::hex << number
-              << " handled with Result 0x" << g_cpu.R[0] << std::dec << '\n';
-}
-
-auto nds_code_numc(std::uint32_t, std::uint32_t) noexcept -> std::uint32_t { return 1; }
-auto arm9_refill_cycles(std::uint32_t) noexcept -> std::uint32_t { return 1; }
-auto arm7_refill_cycles(std::uint32_t) noexcept -> std::uint32_t { return 1; }
-
-auto arm9_cycle_combine(
-    std::uint32_t code, std::uint32_t data, std::uint32_t internal, std::uint32_t loads) noexcept
-    -> std::uint32_t {
-    return code + data + internal + loads;
-}
-
-auto arm7_cycle_combine(
-    std::uint32_t cycles, std::uint32_t data, std::uint32_t loads, bool internal) noexcept
-    -> std::uint32_t {
-    return cycles + data + loads + static_cast<std::uint32_t>(internal);
-}
-
+void ctr_runtime_initialize(std::span<std::byte>m){mem=m;ctr_runtime_reset();} void ctr_runtime_reset(){g_cpu={};g_cpu.cpsr=0x10;g_insn_count={};returns.clear();unwind=false;svc=dispatch=exclusive=~0u;cp15={};}
+std::uint32_t ctr_runtime_last_svc()noexcept{return svc;}std::uint32_t ctr_runtime_last_dispatch()noexcept{return dispatch;}bool runtime_should_yield()noexcept{return false;}bool runtime_unwinding()noexcept{return unwind;}void runtime_insn_slow()noexcept{}void runtime_tick(std::uint32_t)noexcept{}
+void runtime_call_push_return(std::uint32_t a)noexcept{returns.push_back(a);}void runtime_call_cancel_return(std::uint32_t a)noexcept{if(!returns.empty()&&returns.back()==a)returns.pop_back();}bool runtime_call_should_return(std::uint32_t a)noexcept{if(!returns.empty()&&returns.back()==a){returns.pop_back();return true;}return false;}
+void runtime_dispatch(std::uint32_t t)noexcept{dispatch=t;if(auto*f=lookup(t))f->function();else{unwind=true;std::cerr<<"[ctr] unknown branch 0x"<<std::hex<<t<<std::dec<<" (fail closed)\n";}}
+void runtime_dispatch_with_exchange(std::uint32_t t)noexcept{g_cpu.cpsr=(t&1)?(g_cpu.cpsr|CPSR_T_BIT):(g_cpu.cpsr&~CPSR_T_BIT);runtime_dispatch(t);}
+void runtime_link_call(CtrLinkSlot*s)noexcept{runtime_dispatch_with_exchange(s->target);}void runtime_link_branch(CtrLinkSlot*s)noexcept{runtime_dispatch_with_exchange(s->target);}
+void runtime_swi(std::uint32_t n)noexcept{svc=n;g_cpu.R[0]=0xd8e007f7u;}void runtime_irq()noexcept{g_cpu.spsr[0]=g_cpu.cpsr;g_cpu.cpsr=(g_cpu.cpsr&~0x3fu)|0x92u;g_cpu.R[14]=g_cpu.R[15]+4;runtime_dispatch(0x18);}
+void runtime_exception_return(std::uint32_t t)noexcept{g_cpu.cpsr=g_cpu.spsr[0];runtime_dispatch_with_exchange(t|((g_cpu.cpsr&CPSR_T_BIT)?1u:0u));}
+void runtime_unimplemented_op(std::uint32_t pc,std::uint32_t raw)noexcept{unwind=true;std::cerr<<"[ctr] unsupported instruction "<<std::hex<<raw<<" at "<<pc<<std::dec<<"\n";}
+std::uint32_t ctr_code_cycles(std::uint32_t)noexcept{return 1;}std::uint32_t ctr_refill_cycles(std::uint32_t)noexcept{return 3;}std::uint32_t ctr_cycle_combine(std::uint32_t a,std::uint32_t b,std::uint32_t c,bool d)noexcept{return a+b+c+unsigned(d);}
+std::uint32_t runtime_code_cycles(std::uint32_t a,bool)noexcept{return ctr_code_cycles(a);}std::uint32_t runtime_mem_cycles(std::uint32_t,std::uint32_t,bool)noexcept{return 1;}std::uint32_t runtime_mul_cycles(std::uint32_t,bool,std::uint32_t e)noexcept{return 1+e;}
+std::uint32_t runtime_coproc_read(std::uint8_t cp,std::uint8_t op1,std::uint8_t crn,std::uint8_t crm,std::uint8_t op2)noexcept{if(cp!=15){unwind=true;return 0;}if(crn==1&&crm==0&&op1==0&&op2==0)return cp15.control;if(crn==13&&crm==0&&op1==0&&op2==3)return cp15.tls;if(crn==2)return cp15.ttbr0;if(crn==3)return cp15.dacr;return 0;}
+void runtime_coproc_write(std::uint8_t cp,std::uint8_t op1,std::uint8_t crn,std::uint8_t crm,std::uint8_t op2,std::uint32_t v)noexcept{if(cp!=15){unwind=true;return;}if(crn==1&&crm==0&&op1==0&&op2==0)cp15.control=v;else if(crn==13&&crm==0&&op1==0&&op2==3)cp15.tls=v;else if(crn==2)cp15.ttbr0=v;else if(crn==3)cp15.dacr=v;/* cache/TLB maintenance is coherent in the native map */}
+void runtime_coproc_cdp(std::uint8_t cp,std::uint8_t,std::uint8_t,std::uint8_t,std::uint8_t,std::uint8_t)noexcept{if(cp!=15)unwind=true;}
+std::uint32_t runtime_rev(std::uint32_t v)noexcept{return std::byteswap(v);}std::uint32_t runtime_rev16(std::uint32_t v)noexcept{return ((v&0xff00ff00u)>>8)|((v&0x00ff00ffu)<<8);}std::uint32_t runtime_revsh(std::uint32_t v)noexcept{return std::uint32_t(std::int32_t(std::int16_t(std::uint16_t((v>>8)|((v&255)<<8)))));}
+std::uint32_t runtime_ldrex(std::uint32_t a)noexcept{exclusive=a;return bus_read_u32(a);}std::uint32_t runtime_strex(std::uint32_t a,std::uint32_t v)noexcept{if(exclusive!=a)return 1;write(a,v);exclusive=~0u;return 0;}void runtime_cps(bool en,std::uint32_t mask)noexcept{if(mask&0x80)g_cpu.cpsr=en?(g_cpu.cpsr&~CPSR_I_BIT):(g_cpu.cpsr|CPSR_I_BIT);if(mask&0x40)g_cpu.cpsr=en?(g_cpu.cpsr&~CPSR_F_BIT):(g_cpu.cpsr|CPSR_F_BIT);}void runtime_setend(bool b)noexcept{g_cpu.cpsr=b?(g_cpu.cpsr|CPSR_E_BIT):(g_cpu.cpsr&~CPSR_E_BIT);}
+std::uint8_t bus_read_u8(std::uint32_t a)noexcept{return read<std::uint8_t>(a);}std::uint16_t bus_read_u16(std::uint32_t a)noexcept{return read<std::uint16_t>(a);}std::uint32_t bus_read_u32(std::uint32_t a)noexcept{return read<std::uint32_t>(a);}void bus_write_u8(std::uint32_t a,std::uint8_t v)noexcept{write(a,v);}void bus_write_u16(std::uint32_t a,std::uint16_t v)noexcept{write(a,v);}void bus_write_u32(std::uint32_t a,std::uint32_t v)noexcept{write(a,v);}
+std::uint32_t cpsr_c() noexcept{return (g_cpu.cpsr&CPSR_C_BIT)?1u:0u;}
+bool arm_cond_passes_i(std::uint32_t c) noexcept{bool n=g_cpu.cpsr&CPSR_N_BIT,z=g_cpu.cpsr&CPSR_Z_BIT,carry=g_cpu.cpsr&CPSR_C_BIT,v=g_cpu.cpsr&CPSR_V_BIT;switch(c&15){case 0:return z;case 1:return !z;case 2:return carry;case 3:return !carry;case 4:return n;case 5:return !n;case 6:return v;case 7:return !v;case 8:return carry&&!z;case 9:return !carry||z;case 10:return n==v;case 11:return n!=v;case 12:return !z&&n==v;case 13:return z||n!=v;case 14:return true;default:return false;}}
+static void nz(std::uint32_t r){g_cpu.cpsr=(g_cpu.cpsr&~(CPSR_N_BIT|CPSR_Z_BIT))|(r&CPSR_N_BIT)|(r?0:CPSR_Z_BIT);}
+void arm_set_nzc_logic(std::uint32_t r,std::uint32_t c)noexcept{nz(r);g_cpu.cpsr=(g_cpu.cpsr&~CPSR_C_BIT)|(c?CPSR_C_BIT:0);}
+void arm_set_nzcv_add(std::uint32_t a,std::uint32_t b,std::uint32_t r)noexcept{nz(r);auto w=std::uint64_t(a)+b;g_cpu.cpsr=(g_cpu.cpsr&~(CPSR_C_BIT|CPSR_V_BIT))|((w>>32)?CPSR_C_BIT:0)|(((~(a^b)&(a^r))>>31)?CPSR_V_BIT:0);}
+void arm_set_nzcv_sub(std::uint32_t a,std::uint32_t b,std::uint32_t r)noexcept{nz(r);g_cpu.cpsr=(g_cpu.cpsr&~(CPSR_C_BIT|CPSR_V_BIT))|((a>=b)?CPSR_C_BIT:0)|((((a^b)&(a^r))>>31)?CPSR_V_BIT:0);}
+void arm_set_nzcv_sbc(std::uint32_t a,std::uint32_t b,std::uint32_t r,std::uint32_t carry)noexcept{arm_set_nzcv_sub(a,b+(carry?0u:1u),r);}
+bool runtime_slice_yield()noexcept{return false;}void runtime_trace_event(std::uint32_t,std::uint32_t,std::uint32_t,std::uint32_t,std::uint32_t)noexcept{}void runtime_msr_cpsr(std::uint32_t v,std::uint32_t mask)noexcept{std::uint32_t m=mask?mask:0xffffffffu;g_cpu.cpsr=(g_cpu.cpsr&~m)|(v&m);}

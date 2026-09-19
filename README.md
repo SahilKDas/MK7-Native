@@ -71,3 +71,12 @@ Want to talk about the decompilation progress, modern C++ patterns, or track rev
 ## 📄 License
 
 This project is licensed under the BSD 3-Clause License. See the [LICENSE](LICENSE) file for full details.
+
+## External-ROM native build
+
+The CIA stays at its original location and is never copied into this repository. Configure a build with:
+
+    cmake -S . -B build/native -G Ninja -DMK7_ROM_PATH="C:/path/to/MARIO KART 7.cia" -DCTRTOOL_PATH="C:/path/to/ctrtool.exe"
+    cmake --build build/native --target mk7-run
+
+CMake verifies the configured SHA-512, extracts ExeFS only beneath the build directory, generates function-scoped C++, and compiles it. Set `MK7_SYMBOL_MAP` to an mk7re/Ghidra/IDA text or CSV map in `address,size,name,mode` form; size may be omitted and inferred. Without a map, bootstrap discovery deliberately emits the initial closure beginning at `0x00100000 -> 0x00100024`. Unknown branch targets fail closed.
