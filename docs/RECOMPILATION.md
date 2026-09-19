@@ -39,15 +39,33 @@ ctrtool --decompresscode --exefsdir=build/exefs path/to/game.cia
 
 build/default/mk7-recompile.exe `
   --input build/exefs/code.bin `
-  --output generated/usa_rev2/text_00100000.cpp `
+  --output generated/usa_rev2/entry.cpp `
   --image-base 0x00100000 `
   --start 0x00100000 `
-  --size 0x1000
+  --size 4
 ```
 
 The `generated/` directory and common 3DS dump formats are ignored globally by
 this repository.
 
+## Native bring-up runner
+
+After generating the first entry block, compile it into a local runner build:
+
+```powershell
+cmake -S . -B build/native -G Ninja `
+  -DMK7_NATIVE_GENERATED_ENTRY="$PWD/generated/usa_rev2/entry.cpp"
+cmake --build build/native --target mk7-run
+
+build/native/mk7-run.exe path/to/game.cia --ctrtool path/to/ctrtool.exe
+```
+
+`mk7-run` currently supports the verified USA Rev2 image. It computes SHA-512
+over the complete CIA, rejects any other image, extracts ExeFS into a temporary
+directory, initializes the 64 MiB CTR application memory map, executes the
+native entry block, and exercises the fail-closed SVC dispatcher. The current
+entry closure stops safely when it reaches the next unregistered guest block;
+it does not yet boot game UI or gameplay.
 ## Next correctness gates
 
 1. Add ARMv6K decode and semantic tests for instructions absent from ARMv5TE.

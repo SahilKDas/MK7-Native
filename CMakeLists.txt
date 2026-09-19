@@ -3,6 +3,7 @@ project(MK7Native VERSION 0.1.0 LANGUAGES CXX)
 
 option(MK7_NATIVE_BUILD_TESTS "Build the MK7-Native test suite" ON)
 option(MK7_NATIVE_BUILD_RECOMPILER "Build the experimental ARM static recompiler" ON)
+set(MK7_NATIVE_GENERATED_ENTRY "" CACHE FILEPATH "Local generated MK7 entry-block C++ source")
 
 add_library(mk7_formats src/formats/format.cpp)
 add_library(MK7Native::formats ALIAS mk7_formats)
@@ -18,6 +19,32 @@ endif()
 add_executable(mk7-inspect apps/mk7-inspect/main.cpp)
 target_compile_features(mk7-inspect PRIVATE cxx_std_23)
 target_link_libraries(mk7-inspect PRIVATE MK7Native::formats)
+
+set(MK7_ENTRY_SOURCE src/recomp/entry_stub.cpp)
+if(MK7_NATIVE_GENERATED_ENTRY)
+    if(NOT EXISTS "${MK7_NATIVE_GENERATED_ENTRY}")
+        message(FATAL_ERROR "MK7_NATIVE_GENERATED_ENTRY does not exist")
+    endif()
+    set(MK7_ENTRY_SOURCE "${MK7_NATIVE_GENERATED_ENTRY}")
+endif()
+
+add_executable(mk7-run
+    apps/mk7-run/main.cpp
+    src/recomp/runtime.cpp
+    ${MK7_ENTRY_SOURCE}
+)
+target_compile_features(mk7-run PRIVATE cxx_std_23)
+target_include_directories(mk7-run PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+if(WIN32)
+    target_link_libraries(mk7-run PRIVATE bcrypt)
+else()
+    message(FATAL_ERROR "mk7-run currently supports Windows only")
+endif()
+if(MSVC)
+    target_compile_options(mk7-run PRIVATE /std:c++latest /W4 /permissive-)
+else()
+    target_compile_options(mk7-run PRIVATE -std=c++2c -Wall -Wextra -Wpedantic)
+endif()
 
 if(MK7_NATIVE_BUILD_RECOMPILER)
     set(ARM_RECOMP_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/arm-recomp-core")
