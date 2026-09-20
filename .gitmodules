@@ -1,3 +1,6 @@
 [submodule "external/arm-recomp-core"]
 	path = external/arm-recomp-core
 	url = https://github.com/mstan/arm-recomp-core.git
+[submodule "external/SDL"]
+	path = external/SDL
+	url = https://github.com/libsdl-org/SDL.git

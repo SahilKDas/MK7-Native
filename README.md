@@ -30,8 +30,8 @@ Zig was considered, but until Zig has those vtables thingy, nope.
 
 ## 🚀 Building
 
-MK7-Native currently requires CMake 3.25+, Ninja, and a compiler with C++26
-language-mode support.
+MK7-Native currently requires CMake 3.25+, Ninja, the Vulkan SDK, and a compiler with C++26
+language-mode support. SDL3 is supplied as a pinned submodule.
 
 ```sh
 git submodule update --init
@@ -80,3 +80,9 @@ The CIA stays at its original location and is never copied into this repository.
     cmake --build build/native --target mk7-run
 
 CMake verifies the configured SHA-512, extracts ExeFS only beneath the build directory, generates function-scoped C++, and compiles it. Set `MK7_SYMBOL_MAP` to an mk7re/Ghidra/IDA text or CSV map in `address,size,name,mode` form; size may be omitted and inferred. Without a map, bootstrap discovery deliberately emits the initial closure beginning at `0x00100000 -> 0x00100024`. Unknown branch targets fail closed.
+
+## Native visual host
+
+`mk7-run` now creates a resizable SDL3/Vulkan window after loading the verified external ROM. It displays diagnostic top and bottom 3DS surfaces driven by the current runtime snapshot and remains responsive when guest execution fails closed at an unknown target.
+
+Controls: arrow keys map to the D-pad; I/J/K/L map to the Circle Pad; Z/X map to A/B; S/A map to X/Y; Q/W map to L/R; Enter and Backspace map to Start and Select.

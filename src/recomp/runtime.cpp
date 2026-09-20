@@ -5,13 +5,13 @@
 #include <iostream>
 #include <vector>
 ArmCpuState g_cpu{}; std::array<std::uint64_t,2> g_insn_count{}; bool g_insn_hook_armed=false;
-namespace { std::span<std::byte> mem; std::vector<std::uint32_t> returns; bool unwind=false; std::uint32_t svc=~0u,dispatch=~0u,exclusive=~0u; struct {std::uint32_t control{},tls{},ttbr0{},dacr{};} cp15;
+namespace { std::span<std::byte> mem; std::vector<std::uint32_t> returns; bool unwind=false; std::uint32_t svc=~0u,dispatch=~0u,exclusive=~0u,input_buttons=0; float circle_x=0,circle_y=0; struct {std::uint32_t control{},tls{},ttbr0{},dacr{};} cp15;
 const CtrGeneratedFunction* lookup(std::uint32_t target){auto a=target&~1u;for(std::size_t i=0;i<mk7_generated_function_count;++i)if(mk7_generated_functions[i].address==a&&mk7_generated_functions[i].thumb==bool(target&1))return &mk7_generated_functions[i];return nullptr;}
 template<class T>T read(std::uint32_t a){T v{};if(std::uint64_t(a)+sizeof(T)<=mem.size())std::memcpy(&v,mem.data()+a,sizeof v);else unwind=true;return v;}
 template<class T>void write(std::uint32_t a,T v){if(std::uint64_t(a)+sizeof(T)<=mem.size())std::memcpy(mem.data()+a,&v,sizeof v);else unwind=true;exclusive=~0u;}
 }
-void ctr_runtime_initialize(std::span<std::byte>m){mem=m;ctr_runtime_reset();} void ctr_runtime_reset(){g_cpu={};g_cpu.cpsr=0x10;g_insn_count={};returns.clear();unwind=false;svc=dispatch=exclusive=~0u;cp15={};}
-std::uint32_t ctr_runtime_last_svc()noexcept{return svc;}std::uint32_t ctr_runtime_last_dispatch()noexcept{return dispatch;}bool runtime_should_yield()noexcept{return false;}bool runtime_unwinding()noexcept{return unwind;}void runtime_insn_slow()noexcept{}void runtime_tick(std::uint32_t)noexcept{}
+void ctr_runtime_initialize(std::span<std::byte>m){mem=m;ctr_runtime_reset();} void ctr_runtime_reset(){g_cpu={};g_cpu.cpsr=0x10;g_insn_count={};returns.clear();unwind=false;svc=dispatch=exclusive=~0u;input_buttons=0;circle_x=circle_y=0;cp15={};}
+std::uint32_t ctr_runtime_last_svc()noexcept{return svc;}std::uint32_t ctr_runtime_last_dispatch()noexcept{return dispatch;}RuntimeSnapshot ctr_runtime_snapshot()noexcept{return {g_cpu.R[15],dispatch,svc,input_buttons,circle_x,circle_y,g_insn_count[0],unwind};}void ctr_runtime_set_input(std::uint32_t b,float x,float y)noexcept{input_buttons=b;circle_x=x;circle_y=y;}bool runtime_should_yield()noexcept{return false;}bool runtime_unwinding()noexcept{return unwind;}void runtime_insn_slow()noexcept{}void runtime_tick(std::uint32_t)noexcept{}
 void runtime_call_push_return(std::uint32_t a)noexcept{returns.push_back(a);}void runtime_call_cancel_return(std::uint32_t a)noexcept{if(!returns.empty()&&returns.back()==a)returns.pop_back();}bool runtime_call_should_return(std::uint32_t a)noexcept{if(!returns.empty()&&returns.back()==a){returns.pop_back();return true;}return false;}
 void runtime_dispatch(std::uint32_t t)noexcept{dispatch=t;if(auto*f=lookup(t))f->function();else{unwind=true;std::cerr<<"[ctr] unknown branch 0x"<<std::hex<<t<<std::dec<<" (fail closed)\n";}}
 void runtime_dispatch_with_exchange(std::uint32_t t)noexcept{g_cpu.cpsr=(t&1)?(g_cpu.cpsr|CPSR_T_BIT):(g_cpu.cpsr&~CPSR_T_BIT);runtime_dispatch(t);}

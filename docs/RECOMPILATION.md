@@ -6,21 +6,9 @@ encryption material. Each user supplies their own game image locally.
 
 ## Architecture
 
-`mk7-recompile` consumes a decompressed 3DS ExeFS `.code` image and emits C++
-that operates on an explicit 32-bit guest CPU and memory ABI. It is built on
-the MIT-licensed [`arm-recomp-core`](https://github.com/mstan/arm-recomp-core),
-which is pinned as a Git submodule.
+`mk7-recompile` consumes the decompressed 3DS ExeFS code image and emits function-scoped C++ over an explicit 32-bit guest CPU and memory ABI. The local `armv6k_ctr` profile adds ARM11/ARMv6K decoding and a CTR-specific runtime; optional `MK7_SYMBOL_MAP` metadata supplies mk7re/Ghidra/IDA function boundaries.
 
-The initial bring-up profile uses the core's ARMv5TE decoder and emitter. That
-profile translates the ARM instruction subset exercised by the first MK7 code
-page, but its surrounding timing calls target Nintendo DS. It is therefore a
-decoder/code-generation proof, not yet an executable MK7 port. A correct port
-requires an `armv6k_ctr` profile and a CTR runtime implementing memory,
-services, scheduling, graphics, audio, input, and networking.
-
-Unsupported instructions fail closed: the tool reports their guest addresses
-and exits unsuccessfully instead of silently emitting guessed behavior.
-
+Unsupported instructions and unknown control-flow targets fail closed. The native SDL3/Vulkan host remains alive and visualizes the resulting runtime snapshot instead of treating a guest halt as a host crash.
 ## Build
 
 ```sh
@@ -31,54 +19,26 @@ cmake --build --preset default
 
 ## Local workflow
 
-Point the tools at a legally obtained CIA wherever it already lives. Do not
-copy the CIA into this repository: ctrtool reads it in place and extracts
-only the much smaller executable image into a temporary/ignored directory.
-
-```powershell
-$MK7_CIA = "C:/path/to/your/game.cia"
-$MK7_EXEFS = "$env:TEMP/mk7-native-exefs"
-
-ctrtool --decompresscode --exefsdir=$MK7_EXEFS $MK7_CIA
-
-build/default/mk7-recompile.exe `
-  --input "$MK7_EXEFS/code.bin" `
-  --output generated/usa_rev2/entry.cpp `
-  --image-base 0x00100000 `
-  --start 0x00100000 `
-  --size 4
-```
-
-The `generated/` directory and common 3DS dump formats are ignored globally by
-this repository.
-
-## Native bring-up runner
-
-After generating the first entry block, compile it into a local runner build:
+Point CMake at a legally obtained CIA wherever it already lives. The build verifies it in place and writes extracted/generated data only below the selected build directory.
 
 ```powershell
 cmake -S . -B build/native -G Ninja `
-  -DMK7_NATIVE_GENERATED_ENTRY="$PWD/generated/usa_rev2/entry.cpp"
+  -DMK7_ROM_PATH="C:/path/to/your/game.cia" `
+  -DCTRTOOL_PATH="C:/path/to/ctrtool.exe" `
+  -DMK7_SYMBOL_MAP="C:/optional/path/to/mk7re-symbols.csv"
 cmake --build build/native --target mk7-run
+```
+## Native bring-up runner
 
+Run `mk7-run` with the same external CIA and ctrtool. The runner verifies and extracts locally, initializes the CTR memory map, executes the generated entry closure, then keeps a resizable SDL3/Vulkan diagnostic window alive. The current closure stops safely at the next unregistered guest target; the diagnostic top and bottom screens visualize runtime and input state but do not yet contain game graphics.
+
+```powershell
 build/native/mk7-run.exe "$MK7_CIA" --ctrtool path/to/ctrtool.exe
 ```
-
-`mk7-run` currently supports the verified USA Rev2 image. It computes SHA-512
-over the complete CIA at the supplied path, rejects any other image, extracts
-ExeFS into a temporary directory, initializes the 64 MiB CTR application memory map, executes the
-native entry block, and exercises the fail-closed SVC dispatcher. The current
-entry closure stops safely when it reaches the next unregistered guest block;
-it does not yet boot game UI or gameplay.
-
 ## Next correctness gates
 
-1. Add ARMv6K decode and semantic tests for instructions absent from ARMv5TE.
-2. Replace the DS code-generation profile with `armv6k_ctr`.
-3. Import function boundaries and names from independently maintained mk7re
-   metadata rather than treating mixed code and data as a linear instruction
-   stream.
-4. Implement the CTR guest-memory and service-call runtime.
-5. Differentially test generated blocks against an independent 3DS execution
-   oracle before enabling them in the native runner.
-
+1. Import trustworthy USA Rev2 mk7re function metadata and expand the verified call closure.
+2. Differentially test generated ARMv6K blocks against an independent 3DS execution oracle.
+3. Implement the real CTR SVC, HID, and GSP startup path.
+4. Replace the diagnostic framebuffer producer with PICA200 command translation.
+5. Add audio, scheduling, filesystem, and networking services incrementally.

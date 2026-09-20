@@ -1,4 +1,5 @@
 #include <mk7/recomp/runtime.hpp>
+#include <mk7/host/application.hpp>
 
 #include <array>
 #include <cctype>
@@ -153,6 +154,8 @@ auto run_ctrtool(const Options& options, const std::filesystem::path& output) ->
 auto main(int argc, char** argv) -> int {
     try {
         const auto options = options_from(argc, argv);
+        mk7::host::Application host;
+        host.initialize("MK7-Native - CTR bring-up");
         std::cout << "[verify] SHA-512...\n";
         const auto digest = sha512(options.cia);
         if (digest != expected_sha512) {
@@ -183,6 +186,9 @@ auto main(int argc, char** argv) -> int {
         // instructions until the entry closure reaches its first real SVC.
         runtime_swi(0);
         std::cout << "[boot] first service boundary completed without a crash\n";
+        while (host.poll()) {
+            host.render(ctr_runtime_snapshot());
+        }
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "mk7-run: " << error.what() << '\n'

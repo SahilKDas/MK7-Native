@@ -6,12 +6,13 @@
 struct ArmCpuState { std::uint32_t R[16]{}; std::uint32_t cpsr{}; std::array<std::uint32_t,6> spsr{}; };
 struct CtrLinkSlot { void* resolved{}; std::uint32_t epoch{}, target{}, flags{}; };
 struct CtrGeneratedFunction { std::uint32_t address; bool thumb; void (*function)(); };
+struct RuntimeSnapshot { std::uint32_t pc{}, last_dispatch{}, last_svc{}, input_buttons{}; float circle_x{}, circle_y{}; std::uint64_t instructions{}; bool unwinding{}; };
 inline constexpr std::uint32_t CPSR_N_BIT=1u<<31,CPSR_Z_BIT=1u<<30,CPSR_C_BIT=1u<<29,CPSR_V_BIT=1u<<28,CPSR_Q_BIT=1u<<27,CPSR_E_BIT=1u<<9,CPSR_I_BIT=1u<<7,CPSR_F_BIT=1u<<6,CPSR_T_BIT=1u<<5;
 inline constexpr std::uint32_t RUNTIME_TRACE_MEM_WRITE=2,RUNTIME_TRACE_BRANCH=5,CTR_LIVE_TRANSFER_BL=1,CTR_LIVE_TRANSFER_BX=2;
 extern ArmCpuState g_cpu; extern std::array<std::uint64_t,2> g_insn_count; extern bool g_insn_hook_armed;
 extern "C" const CtrGeneratedFunction mk7_generated_functions[]; extern "C" const std::size_t mk7_generated_function_count;
 void ctr_runtime_initialize(std::span<std::byte>); void ctr_runtime_reset();
-std::uint32_t ctr_runtime_last_svc() noexcept; std::uint32_t ctr_runtime_last_dispatch() noexcept;
+std::uint32_t ctr_runtime_last_svc() noexcept; std::uint32_t ctr_runtime_last_dispatch() noexcept; RuntimeSnapshot ctr_runtime_snapshot() noexcept; void ctr_runtime_set_input(std::uint32_t,float,float) noexcept;
 bool runtime_should_yield() noexcept; bool runtime_unwinding() noexcept; void runtime_insn_slow() noexcept; void runtime_tick(std::uint32_t) noexcept;
 void runtime_call_push_return(std::uint32_t) noexcept; void runtime_call_cancel_return(std::uint32_t) noexcept; bool runtime_call_should_return(std::uint32_t) noexcept;
 void runtime_link_call(CtrLinkSlot*) noexcept; void runtime_link_branch(CtrLinkSlot*) noexcept; void runtime_dispatch(std::uint32_t) noexcept; void runtime_dispatch_with_exchange(std::uint32_t) noexcept;
