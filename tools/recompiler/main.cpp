@@ -205,6 +205,30 @@ struct PendingFunction {
                 const auto raw = read_word(bytes, pc - options.image_base);
                 const auto instruction = armv4t::ArmDecoder::decode(raw, pc);
 
+                // ARM literal loads are how the CTR binary materializes callback and
+                // virtual-dispatch targets. Follow only aligned in-image values loaded
+                // by an unconditional LDR Rt, [PC, +/-imm12]; the target still has to
+                // decode as an instruction before it can become a function seed.
+                if ((raw & 0xff7f0000u) == 0xe51f0000u) {
+                    const auto offset = raw & 0xfffu;
+                    const auto literal = (raw & (1u << 23)) != 0 ? pc + 8u + offset : pc + 8u - offset;
+                    if (in_image(bytes, options, literal)) {
+                        const auto pointer = read_word(bytes, literal - options.image_base);
+                        const auto target = pointer & ~1u;
+                        if ((pointer & 1u) == 0 && in_image(bytes, options, target)) {
+                            const auto first_raw = read_word(bytes, target - options.image_base);
+                            const auto first = armv4t::ArmDecoder::decode(first_raw, target);
+                            const bool prologue =
+                                (first_raw & 0xffff0000u) == 0xe92d0000u || // stmdb sp!, {...}
+                                (first_raw & 0xfffff000u) == 0xe24dd000u || // sub sp, sp, #imm
+                                first_raw == 0xe1a0c00du ||                  // mov ip, sp
+                                (first_raw & 0xff000000u) == 0xea000000u || // branch veneer
+                                (first_raw & 0x0ffffff0u) == 0x012fff10u;   // bx register veneer
+                            if (!first.is_undefined && prologue) callees.push_back({target, false});
+                        }
+                    }
+                }
+
                 if (instruction.is_call) {
                     if (!instruction.is_indirect) {
                         const auto target = instruction.branch_target;
@@ -264,6 +288,8 @@ struct PendingFunction {
     else if (instruction.op == Op::Revsh) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_revsh(g_cpu.R[" << unsigned(instruction.rm) << "]);\n";
     else if (instruction.op == Op::Ldrex) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_ldrex(g_cpu.R[" << unsigned(instruction.rn) << "]);\n";
     else if (instruction.op == Op::Strex) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_strex(g_cpu.R[" << unsigned(instruction.rn) << "], g_cpu.R[" << unsigned(instruction.rm) << "]);\n";
+    else if (instruction.op == Op::Ldrexh) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_ldrexh(g_cpu.R[" << unsigned(instruction.rn) << "]);\n";
+    else if (instruction.op == Op::Strexh) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_strexh(g_cpu.R[" << unsigned(instruction.rn) << "], g_cpu.R[" << unsigned(instruction.rm) << "]);\n";
     else if (instruction.op == Op::Uxtb) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_uxtb(g_cpu.R[" << unsigned(instruction.rm) << "], " << ((instruction.raw >> 10) & 3u) * 8u << ");\n";
     else if (instruction.op == Op::Uxth) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_uxth(g_cpu.R[" << unsigned(instruction.rm) << "], " << ((instruction.raw >> 10) & 3u) * 8u << ");\n";
     else if (instruction.op == Op::Sxtb) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_sxtb(g_cpu.R[" << unsigned(instruction.rm) << "], " << ((instruction.raw >> 10) & 3u) * 8u << ");\n";

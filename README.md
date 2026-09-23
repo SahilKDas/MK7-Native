@@ -23,7 +23,7 @@ The native runtime and generated game code use C++; Zig independently audits eve
 
 - [x] Repository initialized & licensed (BSD-3-Clause)
 - [ ] Core architecture & rendering setup
-- [x] First 0.5% reachable native function/byte-map gate (0.5023% verified)
+- [x] First 1% reachable native function/byte-map gate (1.0332% verified)
 - [ ] Broader static decompilation / structural mapping
 - [ ] Asset loading pipeline
 

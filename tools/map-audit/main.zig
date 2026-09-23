@@ -44,9 +44,10 @@ pub fn main(init: std.process.Init) !void {
     const required_bytes = (code_size * permille + 999) / 1000;
     if (mapped_bytes < required_bytes) return error.CoverageBelowTarget;
     if (functions.count() == 0) return error.NoFunctions;
+    const percent_x10000 = (mapped_bytes * 1_000_000 + code_size / 2) / code_size;
     std.debug.print("mk7-map-audit: {d} bytes, {d} instructions, {d} functions ({d}.{d:0>4}% >= {d}.{d}% target)\n", .{
-        mapped_bytes,                     rows,                                              functions.count(),
-        (mapped_bytes * 100) / code_size, ((mapped_bytes * 1_000_000) / code_size) % 10_000, permille / 10,
+        mapped_bytes,            rows,                    functions.count(),
+        percent_x10000 / 10_000, percent_x10000 % 10_000, permille / 10,
         permille % 10,
     });
 }

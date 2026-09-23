@@ -6,7 +6,7 @@ option(MK7_NATIVE_BUILD_RECOMPILER "Build the ARMv6K CTR static recompiler" ON)
 set(MK7_ROM_PATH "" CACHE FILEPATH "Path to the legally obtained MK7 CIA (read in place; never copied)")
 set(CTRTOOL_PATH "" CACHE FILEPATH "Path to ctrtool")
 set(MK7_SYMBOL_MAP "" CACHE FILEPATH "Optional mk7re/Ghidra/IDA function map")
-set(MK7_COVERAGE_PERMILLE 5 CACHE STRING "Minimum reachable code coverage in permille (5 = 0.5%)")
+set(MK7_COVERAGE_PERMILLE 10 CACHE STRING "Minimum reachable code coverage in permille (10 = 1.0%)")
 set(ZIG_EXECUTABLE "" CACHE FILEPATH "Path to the Zig compiler used for generated-map verification")
 set(MK7_ROM_SHA512 "8b10af4bf0347d4ed6076d4b29f36e6d2ab76f6ef60459958ac72842b7345877fb4721992c04664149edce7c294715803d4261b93a9553ef6e85616b71ce0225" CACHE STRING "Expected CIA SHA-512")
 set(MK7_NATIVE_GENERATED_ENTRY "" CACHE FILEPATH "Pre-generated entry C++ source (advanced override)")
@@ -87,7 +87,7 @@ if(MK7_ROM_PATH)
     COMMAND $<TARGET_FILE:mk7-recompile> --input "${MK7_CODE_BIN}" --output "${MK7_ENTRY_SOURCE}" --map-output "${MK7_BYTE_MAP}" --entry 0x00100000 --coverage-permille "${MK7_COVERAGE_PERMILLE}" ${_symbol_args}
     COMMAND "${ZIG_EXECUTABLE}" run "${CMAKE_CURRENT_SOURCE_DIR}/tools/map-audit/main.zig" -- "${MK7_BYTE_MAP}" "${MK7_CODE_BIN}" "${MK7_COVERAGE_PERMILLE}"
     DEPENDS mk7-recompile "${MK7_ROM_PATH}" ${_symbol_dep} cmake/VerifyRom.cmake tools/map-audit/main.zig
-    COMMENT "Verify external CIA, extract ExeFS, and recompile ARMv6K functions" VERBATIM)
+    COMMENT "Verify external CIA, extract ExeFS, recompile ARMv6K functions, and audit coverage" VERBATIM)
   set_source_files_properties("${MK7_ENTRY_SOURCE}" PROPERTIES GENERATED TRUE)
 elseif(MK7_NATIVE_GENERATED_ENTRY)
   if(NOT EXISTS "${MK7_NATIVE_GENERATED_ENTRY}")

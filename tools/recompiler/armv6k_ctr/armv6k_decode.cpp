@@ -8,6 +8,8 @@ Instruction decode(std::uint32_t w, std::uint32_t pc) noexcept {
   else if ((w & 0x0fff0ff0u)==0x06ff0fb0u) i.op=Op::Revsh;
   else if ((w & 0x0ff00fffu)==0x01900f9fu) i.op=Op::Ldrex;
   else if ((w & 0x0ff00ff0u)==0x01800f90u) i.op=Op::Strex;
+  else if ((w & 0x0ff00fffu)==0x01f00f9fu) i.op=Op::Ldrexh;
+  else if ((w & 0x0ff00ff0u)==0x01e00f90u) i.op=Op::Strexh;
   else if ((w & 0x0fff03f0u)==0x06ef0070u) i.op=Op::Uxtb;
   else if ((w & 0x0fff03f0u)==0x06ff0070u) i.op=Op::Uxth;
   else if ((w & 0x0fff03f0u)==0x06af0070u) i.op=Op::Sxtb;
