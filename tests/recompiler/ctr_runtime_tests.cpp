@@ -2,18 +2,25 @@
 #include <array>
 #include <cassert>
 #include <bit>
+#include <vector>
 extern "C" const CtrGeneratedFunction mk7_generated_functions[] = {};
 extern "C" const std::size_t mk7_generated_function_count = 0;
 int main(){
- std::array<std::byte,4096> memory{};ctr_runtime_initialize(memory);
+ std::vector<std::byte> memory(0x4000);ctr_runtime_initialize(memory);
  runtime_coproc_write(15,0,13,0,3,0x12345678);assert(runtime_coproc_read(15,0,13,0,3)==0x12345678);
  bus_write_u32(0x100,0xfeedface);assert(runtime_ldrex(0x100)==0xfeedface);assert(runtime_strex(0x100,0x11223344)==0);assert(bus_read_u32(0x100)==0x11223344);assert(runtime_strex(0x100,0)==1);
  bus_write_u16(0x120,0xabcd);assert(runtime_ldrexh(0x120)==0xabcd);assert(runtime_strexh(0x120,0x12345)==0);assert(bus_read_u16(0x120)==0x2345);assert(runtime_strexh(0x120,0)==1);
  runtime_write_user_reg(7,0x76543210);assert(runtime_read_user_reg(7)==0x76543210);
- g_cpu.R[0]=0;g_cpu.R[1]=0;g_cpu.R[2]=0x2345;g_cpu.R[3]=3;runtime_swi(0x1);assert(g_cpu.R[0]==0&&g_cpu.R[1]>=0x08000000u&&(g_cpu.R[1]&0xfffu)==0);
+ g_cpu.R[0]=0x1000;g_cpu.R[1]=0;g_cpu.R[2]=0x1000;g_cpu.R[3]=3;runtime_swi(0x1);assert(g_cpu.R[0]==0&&g_cpu.R[1]==0x1000);
  g_cpu.R[0]=0xffffffffu;g_cpu.R[1]=0;runtime_swi(0x21);assert(g_cpu.R[0]==0&&g_cpu.R[1]>=0x100u);
 bus_write_u32(0x200,0x3a767273u);bus_write_u8(0x204,0);g_cpu.R[1]=0x200;runtime_swi(0x2d);assert(g_cpu.R[0]==0);const auto srv_handle=g_cpu.R[1];
  runtime_coproc_write(15,0,13,0,3,0x300);bus_write_u32(0x380,0x00010002u);g_cpu.R[0]=srv_handle;runtime_swi(0x32);assert(g_cpu.R[0]==0&&bus_read_u32(0x384)==0);
+ auto get_service=[&](const char* name){for(unsigned i=0;i<8;++i)bus_write_u8(0x384+i,0);unsigned length=0;while(name[length]&&length<8){bus_write_u8(0x384+length,std::uint8_t(name[length]));++length;}bus_write_u32(0x380,0x00050100u);bus_write_u32(0x38c,length);bus_write_u32(0x390,0);g_cpu.R[0]=srv_handle;runtime_swi(0x32);assert(bus_read_u32(0x384)==0);return bus_read_u32(0x38c);};
+ auto ipc=[&](std::uint32_t handle,std::uint16_t command){bus_write_u32(0x380,std::uint32_t(command)<<16);g_cpu.R[0]=handle;runtime_swi(0x32);assert(g_cpu.R[0]==0);};
+ const auto hid=get_service("hid:USER");ipc(hid,0x000a);assert(bus_read_u32(0x384)==0&&bus_read_u32(0x38c)>=0x100);ctr_runtime_set_input(0x55u,0.5f,-0.25f);assert(bus_read_u32(0x804)==0x55u);
+ const auto gsp=get_service("gsp::Gpu");ipc(gsp,0x0013);assert(bus_read_u32(0x384)==0x2a07u&&bus_read_u32(0x390)>=0x100);ipc(gsp,0x0016);assert(bus_read_u32(0x384)==0);ipc(gsp,0x000c);assert(bus_read_u32(0x1800)==1);
+ const auto fs=get_service("fs:USER");ipc(fs,0x0861);assert(bus_read_u32(0x384)==0);ipc(fs,0x080c);assert(bus_read_u32(0x384)==0);const auto archive_lo=bus_read_u32(0x388),archive_hi=bus_read_u32(0x38c);bus_write_u32(0x384,archive_lo);bus_write_u32(0x388,archive_hi);ipc(fs,0x080e);assert(bus_read_u32(0x384)==0);
+ const auto apt=get_service("APT:U");ipc(apt,0x0002);assert(bus_read_u32(0x384)==0&&bus_read_u32(0x38c)>=0x100&&bus_read_u32(0x390)>=0x100);ipc(apt,0x0003);assert(bus_read_u32(0x384)==0);bus_write_u32(0x388,45);ipc(apt,0x004f);ipc(apt,0x0050);assert(bus_read_u32(0x388)==45);ipc(apt,0x0004);assert(bus_read_u32(0x384)==0);
  bus_write_u32(0x380,0x00050100u);bus_write_u32(0x384,0x3a646968u);bus_write_u32(0x388,0x52455355u);bus_write_u32(0x38c,8);bus_write_u32(0x390,0);g_cpu.R[0]=srv_handle;runtime_swi(0x32);assert(g_cpu.R[0]==0&&bus_read_u32(0x384)==0&&bus_read_u32(0x38c)>=0x100u);
  runtime_cps(false,0x80);assert(g_cpu.cpsr&CPSR_I_BIT);runtime_cps(true,0x80);assert(!(g_cpu.cpsr&CPSR_I_BIT));
  ctr_runtime_set_input(0x123u,-0.5f,0.75f);auto snapshot=ctr_runtime_snapshot();assert(snapshot.input_buttons==0x123u&&snapshot.circle_x==-0.5f&&snapshot.circle_y==0.75f);
