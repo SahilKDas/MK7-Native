@@ -2,7 +2,8 @@
 namespace mk7::armv6k {
 Instruction decode(std::uint32_t w, std::uint32_t pc) noexcept {
   Instruction i{.raw=w,.pc=pc,.rd=static_cast<std::uint8_t>((w>>12)&15),.rn=static_cast<std::uint8_t>((w>>16)&15),.rm=static_cast<std::uint8_t>(w&15)};
-  if ((w & 0x0fff0ff0u)==0x06bf0f30u) i.op=Op::Rev;
+  if ((w & 0x0e000e00u)==0x0c000a00u) i.op=Op::VfpLoadStore;
+  else if ((w & 0x0fff0ff0u)==0x06bf0f30u) i.op=Op::Rev;
   else if ((w & 0x0fff0ff0u)==0x06bf0fb0u) i.op=Op::Rev16;
   else if ((w & 0x0fff0ff0u)==0x06ff0fb0u) i.op=Op::Revsh;
   else if ((w & 0x0ff00fffu)==0x01900f9fu) i.op=Op::Ldrex;

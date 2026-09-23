@@ -270,6 +270,7 @@ struct PendingFunction {
     else if (instruction.op == Op::Sxth) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_sxth(g_cpu.R[" << unsigned(instruction.rm) << "], " << ((instruction.raw >> 10) & 3u) * 8u << ");\n";
     else if (instruction.op == Op::Cps) output << "runtime_cps(" << (instruction.enable ? "true" : "false") << ", 0x" << std::hex << (instruction.raw & 0xe0u) << "u);\n";
     else if (instruction.op == Op::Setend) output << "runtime_setend(" << (instruction.big_endian ? "true" : "false") << ");\n";
+    else if (instruction.op == Op::VfpLoadStore) output << "if (arm_cond_passes_i(" << ((instruction.raw >> 28) & 15u) << "u)) runtime_vfp_load_store(0x" << std::hex << instruction.raw << "u);\n";
     return output.str();
 }
 

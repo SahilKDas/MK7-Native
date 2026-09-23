@@ -6,7 +6,8 @@ option(MK7_NATIVE_BUILD_RECOMPILER "Build the ARMv6K CTR static recompiler" ON)
 set(MK7_ROM_PATH "" CACHE FILEPATH "Path to the legally obtained MK7 CIA (read in place; never copied)")
 set(CTRTOOL_PATH "" CACHE FILEPATH "Path to ctrtool")
 set(MK7_SYMBOL_MAP "" CACHE FILEPATH "Optional mk7re/Ghidra/IDA function map")
-set(MK7_COVERAGE_PERMILLE 1 CACHE STRING "Minimum reachable code coverage in permille (1 = 0.1%)")
+set(MK7_COVERAGE_PERMILLE 5 CACHE STRING "Minimum reachable code coverage in permille (5 = 0.5%)")
+set(ZIG_EXECUTABLE "" CACHE FILEPATH "Path to the Zig compiler used for generated-map verification")
 set(MK7_ROM_SHA512 "8b10af4bf0347d4ed6076d4b29f36e6d2ab76f6ef60459958ac72842b7345877fb4721992c04664149edce7c294715803d4261b93a9553ef6e85616b71ce0225" CACHE STRING "Expected CIA SHA-512")
 set(MK7_NATIVE_GENERATED_ENTRY "" CACHE FILEPATH "Pre-generated entry C++ source (advanced override)")
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
@@ -61,6 +62,11 @@ if(MK7_ROM_PATH)
   elseif(NOT EXISTS "${CTRTOOL_PATH}")
     message(FATAL_ERROR "CTRTOOL_PATH does not exist: ${CTRTOOL_PATH}")
   endif()
+  if(NOT ZIG_EXECUTABLE)
+    find_program(ZIG_EXECUTABLE zig REQUIRED)
+  elseif(NOT EXISTS "${ZIG_EXECUTABLE}")
+    message(FATAL_ERROR "ZIG_EXECUTABLE does not exist: ${ZIG_EXECUTABLE}")
+  endif()
   if(MK7_SYMBOL_MAP AND NOT EXISTS "${MK7_SYMBOL_MAP}")
     message(FATAL_ERROR "MK7_SYMBOL_MAP does not exist: ${MK7_SYMBOL_MAP}")
   endif()
@@ -79,7 +85,8 @@ if(MK7_ROM_PATH)
     COMMAND ${CMAKE_COMMAND} "-DINPUT=${MK7_ROM_PATH}" "-DEXPECTED=${MK7_ROM_SHA512}" -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VerifyRom.cmake"
     COMMAND "${CTRTOOL_PATH}" --quiet --decompresscode "--exefsdir=${MK7_GEN_DIR}/exefs" "${MK7_ROM_PATH}"
     COMMAND $<TARGET_FILE:mk7-recompile> --input "${MK7_CODE_BIN}" --output "${MK7_ENTRY_SOURCE}" --map-output "${MK7_BYTE_MAP}" --entry 0x00100000 --coverage-permille "${MK7_COVERAGE_PERMILLE}" ${_symbol_args}
-    DEPENDS mk7-recompile "${MK7_ROM_PATH}" ${_symbol_dep} cmake/VerifyRom.cmake
+    COMMAND "${ZIG_EXECUTABLE}" run "${CMAKE_CURRENT_SOURCE_DIR}/tools/map-audit/main.zig" -- "${MK7_BYTE_MAP}" "${MK7_CODE_BIN}" "${MK7_COVERAGE_PERMILLE}"
+    DEPENDS mk7-recompile "${MK7_ROM_PATH}" ${_symbol_dep} cmake/VerifyRom.cmake tools/map-audit/main.zig
     COMMENT "Verify external CIA, extract ExeFS, and recompile ARMv6K functions" VERBATIM)
   set_source_files_properties("${MK7_ENTRY_SOURCE}" PROPERTIES GENERATED TRUE)
 elseif(MK7_NATIVE_GENERATED_ENTRY)

@@ -2085,7 +2085,7 @@ bool emit_coprocessor(std::ostringstream& body, const Instr& ins,
             return true;
         }
         case IrOp::CDP:
-            body << indent << "runtime_coproc_cdp(" << args << ");\n";
+            body << indent << "runtime_coproc_cdp(" << args << ", " << fmt_hex32(ins.raw) << ");\n";
             return true;
         default:
             return false;

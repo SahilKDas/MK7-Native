@@ -11,4 +11,6 @@ int main() {
   { auto i=decode(0xe6ff3073u,0x1018); assert(i.op==Op::Uxth && i.rd==3 && i.rm==3); }
   { auto i=decode(0xe6ef2471u,0x101c); assert(i.op==Op::Uxtb && i.rd==2 && i.rm==1); }
   { auto i=decode(0xe3a00000u,0x1020); assert(i.op==Op::Base); }
+  { auto i=decode(0xed9f0a3du,0x1024); assert(i.op==Op::VfpLoadStore); }
+  { auto i=decode(0xed2d8b02u,0x1028); assert(i.op==Op::VfpLoadStore); }
 }
