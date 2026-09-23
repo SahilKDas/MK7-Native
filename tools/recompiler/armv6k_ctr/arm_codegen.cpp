@@ -499,10 +499,10 @@ std::string emit_direct_branch(uint32_t target, uint32_t branch_pc,
     // switches modes), this would need updating.
     s << indent << "g_cpu.R[15] = " << fmt_hex32(target) << ";\n";
 
-    if (!is_link &&
-        target >= ctx.current_function_addr &&
-        target < ctx.current_function_end_addr &&
-        target != branch_pc) {
+    const bool target_is_local = ctx.current_instruction_addresses
+        ? ctx.current_instruction_addresses->contains(target)
+        : (target >= ctx.current_function_addr && target < ctx.current_function_end_addr);
+    if (!is_link && target_is_local && target != branch_pc) {
         s << indent << "runtime_trace_event(RUNTIME_TRACE_BRANCH, "
           << fmt_hex32(branch_pc) << ", " << fmt_hex32(target)
           << ", 0u, 0u);\n";
@@ -570,8 +570,7 @@ std::string emit_direct_branch(uint32_t target, uint32_t branch_pc,
         // only grow the shard.
         const bool have_name = ctx.names_by_key &&
             ctx.names_by_key->find(key) != ctx.names_by_key->end();
-        const bool inside_self = target >= ctx.current_function_addr &&
-            target < ctx.current_function_end_addr;
+        const bool inside_self = target_is_local;
         if (!have_name && !inside_self) {
             auto it = ctx.inline_leaves->find(key);
             if (it != ctx.inline_leaves->end()) leaf = &it->second;

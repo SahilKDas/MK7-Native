@@ -7,6 +7,10 @@ Instruction decode(std::uint32_t w, std::uint32_t pc) noexcept {
   else if ((w & 0x0fff0ff0u)==0x06ff0fb0u) i.op=Op::Revsh;
   else if ((w & 0x0ff00fffu)==0x01900f9fu) i.op=Op::Ldrex;
   else if ((w & 0x0ff00ff0u)==0x01800f90u) i.op=Op::Strex;
+  else if ((w & 0x0fff03f0u)==0x06ef0070u) i.op=Op::Uxtb;
+  else if ((w & 0x0fff03f0u)==0x06ff0070u) i.op=Op::Uxth;
+  else if ((w & 0x0fff03f0u)==0x06af0070u) i.op=Op::Sxtb;
+  else if ((w & 0x0fff03f0u)==0x06bf0070u) i.op=Op::Sxth;
   else if ((w & 0xfffffdffu)==0xf1010000u) { i.op=Op::Setend; i.big_endian=(w&0x200u)!=0; }
   else if ((w & 0xfff10020u)==0xf1000000u) { i.op=Op::Cps; i.enable=(w&0x00080000u)==0; }
   return i;

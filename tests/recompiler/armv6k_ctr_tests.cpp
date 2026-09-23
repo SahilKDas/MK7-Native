@@ -8,5 +8,7 @@ int main() {
   { auto i=decode(0xe1912f9fu,0x100c); assert(i.op==Op::Ldrex && i.rn==1 && i.rd==2); }
   { auto i=decode(0xe1812f93u,0x1010); assert(i.op==Op::Strex && i.rn==1 && i.rd==2 && i.rm==3); }
   { auto i=decode(0xf1010200u,0x1014); assert(i.op==Op::Setend && i.big_endian); }
-  { auto i=decode(0xe3a00000u,0x1018); assert(i.op==Op::Base); }
+  { auto i=decode(0xe6ff3073u,0x1018); assert(i.op==Op::Uxth && i.rd==3 && i.rm==3); }
+  { auto i=decode(0xe6ef2471u,0x101c); assert(i.op==Op::Uxtb && i.rd==2 && i.rm==1); }
+  { auto i=decode(0xe3a00000u,0x1020); assert(i.op==Op::Base); }
 }

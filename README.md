@@ -23,7 +23,8 @@ Zig was considered, but until Zig has those vtables thingy, nope.
 
 - [x] Repository initialized & licensed (BSD-3-Clause)
 - [ ] Core architecture & rendering setup
-- [ ] Static decompilation / structural mapping
+- [x] First 0.1% reachable native function/byte-map gate
+- [ ] Broader static decompilation / structural mapping
 - [ ] Asset loading pipeline
 
 ---
@@ -52,7 +53,7 @@ the Nintendo and Mario Kart 7 formats that will underpin the asset pipeline:
 > copyrighted game data. MK7-Native is developed from independently written
 > code and user-supplied game data.
 
-See [Static recompilation](docs/RECOMPILATION.md) for the local ROM-to-C++
+See [Native coverage](docs/COVERAGE.md) for measured progress and [Static recompilation](docs/RECOMPILATION.md) for the local ROM-to-C++
 workflow, current architecture limits, and correctness gates.
 
 The game CIA remains wherever the user stores it; pass its absolute path to

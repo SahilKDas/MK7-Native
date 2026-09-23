@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "arm_ir.h"
@@ -74,6 +75,7 @@ struct CodegenCtx {
     uint32_t current_function_addr = 0xFFFFFFFFu;
     uint32_t current_function_end_addr = 0xFFFFFFFFu;
     bool current_function_thumb = false;
+    const std::unordered_set<uint32_t>* current_instruction_addresses = nullptr;
     bool force_bx_c_return = false;
     bool trace_live_transfers = false;
     // MSR CPSR fast path: write the masked CPSR bytes inline when the

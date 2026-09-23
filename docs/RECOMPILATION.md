@@ -6,7 +6,7 @@ encryption material. Each user supplies their own game image locally.
 
 ## Architecture
 
-`mk7-recompile` consumes the decompressed 3DS ExeFS code image and emits function-scoped C++ over an explicit 32-bit guest CPU and memory ABI. The local `armv6k_ctr` profile adds ARM11/ARMv6K decoding and a CTR-specific runtime; optional `MK7_SYMBOL_MAP` metadata supplies mk7re/Ghidra/IDA function boundaries.
+`mk7-recompile` consumes the decompressed 3DS ExeFS code image and emits function-scoped C++ over an explicit 32-bit guest CPU and memory ABI. The local `armv6k_ctr` profile adds ARM11/ARMv6K decoding and a CTR-specific runtime; optional `MK7_SYMBOL_MAP` metadata supplies mk7re/Ghidra/IDA function boundaries. Without metadata, the reachability mapper follows ARM control flow until `MK7_COVERAGE_PERMILLE` is satisfied and emits a local CSV byte map.
 
 Unsupported instructions and unknown control-flow targets fail closed. The native SDL3/Vulkan host remains alive and visualizes the resulting runtime snapshot instead of treating a guest halt as a host crash.
 ## Build
@@ -30,7 +30,7 @@ cmake --build build/native --target mk7-run
 ```
 ## Native bring-up runner
 
-Run `mk7-run` with the same external CIA and ctrtool. The runner verifies and extracts locally, initializes the CTR memory map, executes the generated entry closure, then keeps a resizable SDL3/Vulkan diagnostic window alive. The current closure stops safely at the next unregistered guest target; the diagnostic top and bottom screens visualize runtime and input state but do not yet contain game graphics.
+Run `mk7-run` with the same external CIA and ctrtool. The runner verifies and extracts locally, initializes the CTR memory map, executes the generated entry closure, then keeps a resizable SDL3/Vulkan diagnostic window alive. The current 0.1% closure registers 68 functions, compiles 5,732 mapped bytes, and reaches the real startup `SVC 0x21` at guest PC `0x00101564`. The diagnostic top and bottom screens visualize runtime and input state but do not yet contain game graphics.
 
 ```powershell
 build/native/mk7-run.exe "$MK7_CIA" --ctrtool path/to/ctrtool.exe

@@ -29,7 +29,8 @@ namespace {
 constexpr std::string_view expected_sha512 =
     "8b10af4bf0347d4ed6076d4b29f36e6d2ab76f6ef60459958ac72842b7345877"
     "fb4721992c04664149edce7c294715803d4261b93a9553ef6e85616b71ce0225";
-constexpr std::size_t ctr_application_memory_size = 64u * 1024u * 1024u;
+constexpr std::size_t ctr_user_address_space_size = 0x10000000u;
+constexpr std::uint32_t ctr_main_stack_top = 0x10000000u;
 constexpr std::uint32_t text_address = 0x00100000u;
 constexpr std::size_t expected_code_size = 0x00577000u;
 
@@ -173,19 +174,23 @@ auto main(int argc, char** argv) -> int {
             throw std::runtime_error{"unexpected decompressed code size"};
         }
 
-        std::vector<std::byte> memory(ctr_application_memory_size);
+        std::vector<std::byte> memory(ctr_user_address_space_size);
         std::copy(code.begin(), code.end(), memory.begin() + text_address);
         ctr_runtime_initialize(memory);
-        std::cout << "[memory] initialized 64 MiB CTR application map\n";
+        g_cpu.R[13] = ctr_main_stack_top;
+        std::cout << "[memory] initialized 256 MiB CTR user map; SP=0x10000000\n";
 
         mk7_recomp_block_100000();
         std::cout << "[recomp] entry block executed; next PC=0x" << std::hex
                   << ctr_runtime_last_dispatch() << std::dec << '\n';
 
-        // Exercise the same fail-closed dispatcher used by generated SVC
-        // instructions until the entry closure reaches its first real SVC.
-        runtime_swi(0);
-        std::cout << "[boot] first service boundary completed without a crash\n";
+        const auto startup = ctr_runtime_snapshot();
+        if (startup.last_svc != 0xffffffffu) {
+            std::cout << "[boot] real SVC 0x" << std::hex << startup.last_svc
+                      << " completed without a crash; PC=0x" << startup.pc << std::dec << '\n';
+        } else {
+            std::cout << "[boot] no SVC reached; PC=0x" << std::hex << startup.pc << std::dec << '\n';
+        }
         while (host.poll()) {
             host.render(ctr_runtime_snapshot());
         }

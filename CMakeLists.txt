@@ -6,6 +6,7 @@ option(MK7_NATIVE_BUILD_RECOMPILER "Build the ARMv6K CTR static recompiler" ON)
 set(MK7_ROM_PATH "" CACHE FILEPATH "Path to the legally obtained MK7 CIA (read in place; never copied)")
 set(CTRTOOL_PATH "" CACHE FILEPATH "Path to ctrtool")
 set(MK7_SYMBOL_MAP "" CACHE FILEPATH "Optional mk7re/Ghidra/IDA function map")
+set(MK7_COVERAGE_PERMILLE 1 CACHE STRING "Minimum reachable code coverage in permille (1 = 0.1%)")
 set(MK7_ROM_SHA512 "8b10af4bf0347d4ed6076d4b29f36e6d2ab76f6ef60459958ac72842b7345877fb4721992c04664149edce7c294715803d4261b93a9553ef6e85616b71ce0225" CACHE STRING "Expected CIA SHA-512")
 set(MK7_NATIVE_GENERATED_ENTRY "" CACHE FILEPATH "Pre-generated entry C++ source (advanced override)")
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
@@ -66,17 +67,18 @@ if(MK7_ROM_PATH)
   set(MK7_GEN_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
   set(MK7_CODE_BIN "${MK7_GEN_DIR}/exefs/code.bin")
   set(MK7_ENTRY_SOURCE "${MK7_GEN_DIR}/mk7_entry.cpp")
+  set(MK7_BYTE_MAP "${MK7_GEN_DIR}/mk7_entry.map.csv")
   set(_symbol_args)
   set(_symbol_dep)
   if(MK7_SYMBOL_MAP)
     list(APPEND _symbol_args --symbols "${MK7_SYMBOL_MAP}")
     list(APPEND _symbol_dep "${MK7_SYMBOL_MAP}")
   endif()
-  add_custom_command(OUTPUT "${MK7_ENTRY_SOURCE}"
+  add_custom_command(OUTPUT "${MK7_ENTRY_SOURCE}" "${MK7_BYTE_MAP}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${MK7_GEN_DIR}/exefs"
     COMMAND ${CMAKE_COMMAND} "-DINPUT=${MK7_ROM_PATH}" "-DEXPECTED=${MK7_ROM_SHA512}" -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VerifyRom.cmake"
     COMMAND "${CTRTOOL_PATH}" --quiet --decompresscode "--exefsdir=${MK7_GEN_DIR}/exefs" "${MK7_ROM_PATH}"
-    COMMAND $<TARGET_FILE:mk7-recompile> --input "${MK7_CODE_BIN}" --output "${MK7_ENTRY_SOURCE}" --entry 0x00100000 ${_symbol_args}
+    COMMAND $<TARGET_FILE:mk7-recompile> --input "${MK7_CODE_BIN}" --output "${MK7_ENTRY_SOURCE}" --map-output "${MK7_BYTE_MAP}" --entry 0x00100000 --coverage-permille "${MK7_COVERAGE_PERMILLE}" ${_symbol_args}
     DEPENDS mk7-recompile "${MK7_ROM_PATH}" ${_symbol_dep} cmake/VerifyRom.cmake
     COMMENT "Verify external CIA, extract ExeFS, and recompile ARMv6K functions" VERBATIM)
   set_source_files_properties("${MK7_ENTRY_SOURCE}" PROPERTIES GENERATED TRUE)
