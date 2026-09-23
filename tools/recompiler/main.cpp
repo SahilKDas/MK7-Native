@@ -243,6 +243,10 @@ struct PendingFunction {
                 local.insert(pc);
                 const auto raw = read_word(bytes, pc - options.image_base);
                 const auto instruction = armv4t::ArmDecoder::decode(raw, pc);
+                if (instruction.op == armv4t::IrOp::SWI) {
+                    callees.push_back({pc + 4u, false});
+                    break;
+                }
 
                 // ARM literal loads are how the CTR binary materializes callback and
                 // virtual-dispatch targets. Follow only aligned in-image values loaded
@@ -389,7 +393,8 @@ struct PendingFunction {
     for (auto& shard : shard_outputs) shard << '\n';
     output << "\nextern \"C\" const CtrGeneratedFunction mk7_generated_functions[] = {\n";
     for (const auto& function : functions) {
-        output << "  {0x" << std::hex << function.address << "u, "
+        output << "  {0x" << std::hex << function.address << "u, 0x"
+               << (function.instructions.empty() ? function.address : function.instructions.back()) << "u, "
                << (function.thumb ? "true" : "false") << ", &" << function.name << "},\n";
     }
     output << "};\nextern \"C\" const std::size_t mk7_generated_function_count = "
@@ -404,6 +409,11 @@ struct PendingFunction {
         if (function.instructions.empty()) continue;
 
         body << "extern \"C\" void " << function.name << "() {\n";
+        body << "    switch (g_cpu.R[15] & ~1u) {\n";
+        for (const auto pc : function.instructions)
+            body << "    case 0x" << std::hex << pc << "u: goto L_" << std::uppercase
+                 << std::setw(8) << std::setfill('0') << pc << ";\n";
+        body << "    default: runtime_unimplemented_op(\"resume target\", g_cpu.R[15]); return;\n    }\n";
         armv4t::CodegenCtx context;
         context.names_by_key = &names;
         context.current_function_addr = function.address;
@@ -438,8 +448,8 @@ struct PendingFunction {
         body << "}\n\n";
     }
 
-    output << "extern \"C\" void mk7_recomp_block_100000(){ "
-           << names[(std::uint64_t(options.entry) << 1)] << "(); }\n";
+    output << "extern \"C\" void mk7_recomp_block_100000(){ g_cpu.R[15] = 0x" << std::hex
+           << options.entry << "u; " << names[(std::uint64_t(options.entry) << 1)] << "(); }\n";
     std::cerr << "mk7-recompile: emitted " << std::dec << emitted_bytes << " mapped bytes across "
               << functions.size() << " functions\n";
     return supported;

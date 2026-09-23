@@ -192,6 +192,7 @@ auto main(int argc, char** argv) -> int {
             std::cout << "[boot] no SVC reached; PC=0x" << std::hex << startup.pc << std::dec << '\n';
         }
         while (host.poll()) {
+            if (!runtime_unwinding()) ctr_runtime_resume();
             host.render(ctr_runtime_snapshot());
         }
         return 0;
