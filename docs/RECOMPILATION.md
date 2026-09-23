@@ -9,6 +9,8 @@ encryption material. Each user supplies their own game image locally.
 `mk7-recompile` consumes the decompressed 3DS ExeFS code image and emits function-scoped C++ over an explicit 32-bit guest CPU and memory ABI. The local `armv6k_ctr` profile adds ARM11/ARMv6K decoding and a CTR-specific runtime; optional `MK7_SYMBOL_MAP` metadata supplies mk7re/Ghidra/IDA function boundaries. Without metadata, the reachability mapper follows ARM control flow plus validated PC-relative callback pointers, then conservatively indexes unclaimed ARM prologues and veneers within the ExHeader-defined executable text region until `MK7_COVERAGE_PERMILLE` is satisfied and emits a local CSV byte map. Generated functions are distributed across `MK7_GENERATED_SHARDS` C++ translation units to bound compiler memory. A Zig audit then verifies map uniqueness, instruction support, function presence, and the requested byte-coverage threshold before the generated C++ may compile.
 
 Unsupported instructions and unknown control-flow targets fail closed. The native SDL3/Vulkan host remains alive and visualizes the resulting runtime snapshot instead of treating a guest halt as a host crash.
+
+The CTR runtime now implements typed kernel handles, page-aligned `ControlMemory`, `CreateAddressArbiter`, `ConnectToPort`, `SendSyncRequest`, TLS IPC command buffers, `srv:` client registration, and validated service-handle acquisition for the initial APT, CFG, CSND, DSP, FS, GSP, HID, IR, NDM, PTM, and SOC endpoints. Unknown handles, ports, services, and command IDs return explicit errors instead of blanket success.
 ## Build
 
 ```sh
@@ -39,6 +41,6 @@ build/native/mk7-run.exe "$MK7_CIA" --ctrtool path/to/ctrtool.exe
 
 1. Import trustworthy USA Rev2 mk7re function metadata and expand the verified call closure.
 2. Differentially test generated ARMv6K blocks against an independent 3DS execution oracle.
-3. Implement the real CTR SVC, HID, and GSP startup path.
+3. Implement per-service HID shared-memory, GSP command-queue, FS archive, and APT lifecycle commands.
 4. Replace the diagnostic framebuffer producer with PICA200 command translation.
 5. Add audio, scheduling, filesystem, and networking services incrementally.
