@@ -14,6 +14,8 @@ int main(){
  runtime_setend(true);assert(g_cpu.cpsr&CPSR_E_BIT);runtime_setend(false);assert(!(g_cpu.cpsr&CPSR_E_BIT));
  assert(runtime_clz(0x00010000)==15);
  runtime_vfp_set_word(0,std::bit_cast<std::uint32_t>(1.5f));runtime_vfp_set_word(2,std::bit_cast<std::uint32_t>(2.25f));runtime_coproc_cdp(10,3,0,1,0,0xee301a01u);assert(std::bit_cast<float>(runtime_vfp_word(2))==3.75f);
+ g_cpu.cpsr=0;arm_set_nzcv_adc(0xffffffffu,0u,1u,0u);assert((g_cpu.cpsr&(CPSR_Z_BIT|CPSR_C_BIT))==(CPSR_Z_BIT|CPSR_C_BIT));
+ g_cpu.cpsr=0;arm_set_nzcv_adc(0x7fffffffu,0u,1u,0x80000000u);assert((g_cpu.cpsr&(CPSR_N_BIT|CPSR_V_BIT))==(CPSR_N_BIT|CPSR_V_BIT));
  assert(runtime_rev(0x11223344)==0x44332211);assert(runtime_uxth(0x89abcdef,0)==0xcdef);assert(runtime_uxtb(0x11223344,8)==0x33);assert(runtime_sxth(0x00008001,0)==0xffff8001);assert(runtime_rev16(0x11223344)==0x22114433);
  g_cpu.R[13]=0x300;runtime_vfp_set_word(16,0x11223344);runtime_vfp_set_word(17,0x55667788);runtime_vfp_load_store(0xed2d8b02u);assert(g_cpu.R[13]==0x2f8);assert(bus_read_u32(0x2f8)==0x11223344);assert(bus_read_u32(0x2fc)==0x55667788);runtime_vfp_set_word(16,0);runtime_vfp_set_word(17,0);runtime_vfp_load_store(0xecbd8b02u);assert(g_cpu.R[13]==0x300);assert(runtime_vfp_word(16)==0x11223344);assert(runtime_vfp_word(17)==0x55667788);
 }

@@ -168,6 +168,13 @@ struct Options {
     return functions;
 }
 
+[[nodiscard]] bool looks_like_arm_function_entry(std::uint32_t word) noexcept {
+    return (word & 0xffff0000u) == 0xe92d0000u || // stmdb sp!, {...}
+           (word & 0xfffff000u) == 0xe24dd000u || // sub sp, sp, #imm
+           word == 0xe1a0c00du ||                  // mov ip, sp
+           (word & 0xff000000u) == 0xea000000u || // branch veneer
+           (word & 0x0ffffff0u) == 0x012fff10u;   // bx register veneer
+}
 struct PendingFunction {
     std::uint32_t address{};
     bool thumb{};
@@ -182,8 +189,26 @@ struct PendingFunction {
     std::set<std::uint32_t> claimed;
     std::vector<Function> functions;
     std::size_t covered_bytes{};
+    std::uint32_t scan_cursor = options.image_base;
 
-    while (!pending.empty() && covered_bytes < target_bytes) {
+    while (covered_bytes < target_bytes) {
+        if (pending.empty()) {
+            bool found{};
+            while (in_image(bytes, options, scan_cursor)) {
+                const auto candidate = scan_cursor;
+                const auto raw = read_word(bytes, candidate - options.image_base);
+                scan_cursor += 4;
+                const auto key = std::uint64_t(candidate) << 1;
+                if (!claimed.contains(candidate) && !queued.contains(key) &&
+                    looks_like_arm_function_entry(raw)) {
+                    queued.insert(key);
+                    pending.push_back({candidate, false});
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) break;
+        }
         const auto request = pending.front();
         pending.pop_front();
         if (request.thumb || !in_image(bytes, options, request.address) ||
@@ -218,13 +243,9 @@ struct PendingFunction {
                         if ((pointer & 1u) == 0 && in_image(bytes, options, target)) {
                             const auto first_raw = read_word(bytes, target - options.image_base);
                             const auto first = armv4t::ArmDecoder::decode(first_raw, target);
-                            const bool prologue =
-                                (first_raw & 0xffff0000u) == 0xe92d0000u || // stmdb sp!, {...}
-                                (first_raw & 0xfffff000u) == 0xe24dd000u || // sub sp, sp, #imm
-                                first_raw == 0xe1a0c00du ||                  // mov ip, sp
-                                (first_raw & 0xff000000u) == 0xea000000u || // branch veneer
-                                (first_raw & 0x0ffffff0u) == 0x012fff10u;   // bx register veneer
-                            if (!first.is_undefined && prologue) callees.push_back({target, false});
+                            if (!first.is_undefined && looks_like_arm_function_entry(first_raw)) {
+                                callees.push_back({target, false});
+                            }
                         }
                     }
                 }
