@@ -32,7 +32,7 @@ cmake --build build/native --target mk7-run
 ```
 ## Native bring-up runner
 
-Run `mk7-run` with the same external CIA and ctrtool. The runner verifies and extracts locally, initializes the CTR memory map, executes the generated entry closure, then keeps a resizable SDL3/Vulkan diagnostic window alive. The current 79% closure registers 29,954 functions, compiles 4,526,956 mapped bytes (1,131,739 ARM instructions), and reaches the real startup `SVC 0x21` at guest PC `0x00101564`. The diagnostic top and bottom screens visualize runtime and input state but do not yet contain game graphics.
+Run `mk7-run` with the same external CIA and ctrtool. The runner verifies and extracts locally, initializes the CTR memory map, executes the generated entry closure, then keeps a resizable SDL3/Vulkan diagnostic window alive. The current 79% closure registers 29,954 functions, compiles 4,526,956 mapped bytes (1,131,739 ARM instructions), and reaches the real startup `SVC 0x21` at guest PC `0x00101564`. The Vulkan host now presents valid guest top and bottom framebuffers. The first PICA200 slice decodes command headers, masked and consecutive register writes, draw triggers, memory fills, copies, GSP queue submission, and framebuffer swaps; unsupported shader/raster state remains future work.
 
 ```powershell
 build/native/mk7-run.exe "$MK7_CIA" --ctrtool path/to/ctrtool.exe
@@ -41,6 +41,6 @@ build/native/mk7-run.exe "$MK7_CIA" --ctrtool path/to/ctrtool.exe
 
 1. Import trustworthy USA Rev2 mk7re function metadata and expand the verified call closure.
 2. Differentially test generated ARMv6K blocks against an independent 3DS execution oracle.
-3. Implement per-service HID shared-memory, GSP command-queue, FS archive, and APT lifecycle commands.
-4. Replace the diagnostic framebuffer producer with PICA200 command translation.
+3. Expand the initial HID, GSP, FS, and APT commands into complete service coverage.
+4. Extend the initial PICA200 decoder into vertex shading, rasterization, texturing, blending, and depth/stencil Vulkan pipelines.
 5. Add audio, scheduling, filesystem, and networking services incrementally.

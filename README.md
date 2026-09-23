@@ -84,6 +84,6 @@ CMake verifies the configured SHA-512, extracts ExeFS only beneath the build dir
 
 ## Native visual host
 
-`mk7-run` now creates a resizable SDL3/Vulkan window after loading the verified external ROM. It displays diagnostic top and bottom 3DS surfaces driven by the current runtime snapshot and remains responsive when guest execution fails closed at an unknown target.
+`mk7-run` now creates a resizable SDL3/Vulkan window after loading the verified external ROM. It presents guest top and bottom framebuffers through Vulkan after GSP buffer swaps, with the diagnostic surfaces retained until a valid guest framebuffer is available. The initial PICA200 path decodes masked command-list register writes, draw triggers, GX memory fills, copies, and shared command-queue submission.
 
-Controls: arrow keys map to the D-pad; I/J/K/L map to the Circle Pad; Z/X map to A/B; S/A map to X/Y; Q/W map to L/R; Enter and Backspace map to Start and Select.
+Azahar default controls: A/S/Z/X map to A/B/X/Y; T/G/F/H map to the D-pad; arrow keys map to the Circle Pad; Q/W map to L/R; M/N map to Start/Select. SDL gamepads use face buttons, shoulders, D-pad, Start/Back, and the left stick.
