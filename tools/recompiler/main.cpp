@@ -38,6 +38,8 @@ struct Options {
     std::uint32_t image_base = 0x00100000;
     std::uint32_t entry = 0x00100000;
     std::uint32_t coverage_permille = 1;
+    std::uint32_t executable_size{};
+    std::uint32_t shards = 1;
 };
 
 [[nodiscard]] std::uint32_t number(std::string_view text) {
@@ -73,6 +75,8 @@ struct Options {
         else if (argument == "--image-base") result.image_base = number(next());
         else if (argument == "--entry") result.entry = number(next());
         else if (argument == "--coverage-permille") result.coverage_permille = number(next());
+        else if (argument == "--executable-size") result.executable_size = number(next());
+        else if (argument == "--shards") result.shards = number(next());
         else throw std::runtime_error("unknown argument: " + std::string(argument));
     }
     if (result.input.empty() || result.output.empty()) {
@@ -81,6 +85,7 @@ struct Options {
     if (result.coverage_permille == 0 || result.coverage_permille > 1000) {
         throw std::runtime_error("--coverage-permille must be between 1 and 1000");
     }
+    if (result.shards == 0 || result.shards > 256) throw std::runtime_error("--shards must be between 1 and 256");
     if (result.map_output.empty()) {
         result.map_output = result.output;
         result.map_output.replace_extension(".map.csv");
@@ -102,6 +107,15 @@ struct Options {
            (address & 3u) == 0;
 }
 
+[[nodiscard]] bool in_executable(std::span<const std::uint8_t> bytes, const Options& options,
+                                 std::uint32_t address) {
+    const auto size = options.executable_size == 0
+        ? bytes.size()
+        : std::min<std::size_t>(bytes.size(), options.executable_size);
+    return address >= options.image_base &&
+           std::uint64_t(address - options.image_base) + 4 <= size &&
+           (address & 3u) == 0;
+}
 [[nodiscard]] std::string identifier(std::string name, std::uint32_t address) {
     if (name.empty() || name == "sub") {
         std::ostringstream generated;
@@ -194,7 +208,7 @@ struct PendingFunction {
     while (covered_bytes < target_bytes) {
         if (pending.empty()) {
             bool found{};
-            while (in_image(bytes, options, scan_cursor)) {
+            while (in_executable(bytes, options, scan_cursor)) {
                 const auto candidate = scan_cursor;
                 const auto raw = read_word(bytes, candidate - options.image_base);
                 scan_cursor += 4;
@@ -211,7 +225,7 @@ struct PendingFunction {
         }
         const auto request = pending.front();
         pending.pop_front();
-        if (request.thumb || !in_image(bytes, options, request.address) ||
+        if (request.thumb || !in_executable(bytes, options, request.address) ||
             claimed.contains(request.address)) {
             continue;
         }
@@ -224,7 +238,7 @@ struct PendingFunction {
         while (!blocks.empty() && local.size() < 4096) {
             auto pc = blocks.front();
             blocks.pop_front();
-            while (in_image(bytes, options, pc) && !local.contains(pc) &&
+            while (in_executable(bytes, options, pc) && !local.contains(pc) &&
                    !claimed.contains(pc) && local.size() < 4096) {
                 local.insert(pc);
                 const auto raw = read_word(bytes, pc - options.image_base);
@@ -240,7 +254,7 @@ struct PendingFunction {
                     if (in_image(bytes, options, literal)) {
                         const auto pointer = read_word(bytes, literal - options.image_base);
                         const auto target = pointer & ~1u;
-                        if ((pointer & 1u) == 0 && in_image(bytes, options, target)) {
+                        if ((pointer & 1u) == 0 && in_executable(bytes, options, target)) {
                             const auto first_raw = read_word(bytes, target - options.image_base);
                             const auto first = armv4t::ArmDecoder::decode(first_raw, target);
                             if (!first.is_undefined && looks_like_arm_function_entry(first_raw)) {
@@ -270,7 +284,7 @@ struct PendingFunction {
                         }
                         break;
                     }
-                    if (in_image(bytes, options, target)) blocks.push_back(target);
+                    if (in_executable(bytes, options, target)) blocks.push_back(target);
                 }
                 pc += 4;
             }
@@ -284,7 +298,7 @@ struct PendingFunction {
 
         for (const auto callee : callees) {
             const auto key = (std::uint64_t(callee.address) << 1) | callee.thumb;
-            if (in_image(bytes, options, callee.address) && queued.insert(key).second) {
+            if (in_executable(bytes, options, callee.address) && queued.insert(key).second) {
                 pending.push_back(callee);
             }
         }
@@ -318,6 +332,14 @@ struct PendingFunction {
     else if (instruction.op == Op::Cps) output << "runtime_cps(" << (instruction.enable ? "true" : "false") << ", 0x" << std::hex << (instruction.raw & 0xe0u) << "u);\n";
     else if (instruction.op == Op::Setend) output << "runtime_setend(" << (instruction.big_endian ? "true" : "false") << ");\n";
     else if (instruction.op == Op::VfpLoadStore) output << "if (arm_cond_passes_i(" << ((instruction.raw >> 28) & 15u) << "u)) runtime_vfp_load_store(0x" << std::hex << instruction.raw << "u);\n";
+    else if (instruction.op == Op::Pkhbt) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_pkhbt(g_cpu.R[" << unsigned(instruction.rn) << "], g_cpu.R[" << unsigned(instruction.rm) << "], " << ((instruction.raw >> 7) & 31u) << ");\n";
+    else if (instruction.op == Op::Usat) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_usat(g_cpu.R[" << unsigned(instruction.rm) << "], " << ((instruction.raw >> 16) & 31u) << ", " << ((instruction.raw >> 7) & 31u) << ", " << ((instruction.raw & 0x40u) ? "true" : "false") << ");\n";
+    else if (instruction.op == Op::Uxtah) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_uxtah(g_cpu.R[" << unsigned(instruction.rn) << "], g_cpu.R[" << unsigned(instruction.rm) << "], " << (((instruction.raw >> 10) & 3u) * 8u) << ");\n";
+    else if (instruction.op == Op::Sxtah) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_sxtah(g_cpu.R[" << unsigned(instruction.rn) << "], g_cpu.R[" << unsigned(instruction.rm) << "], " << (((instruction.raw >> 10) & 3u) * 8u) << ");\n";
+    else if (instruction.op == Op::Uxtab) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_uxtab(g_cpu.R[" << unsigned(instruction.rn) << "], g_cpu.R[" << unsigned(instruction.rm) << "], " << (((instruction.raw >> 10) & 3u) * 8u) << ");\n";
+    else if (instruction.op == Op::Ldrexd) output << "runtime_ldrexd(g_cpu.R[" << unsigned(instruction.rn) << "], g_cpu.R[" << unsigned(instruction.rd) << "], g_cpu.R[" << unsigned(instruction.rd + 1u) << "]);\n";
+    else if (instruction.op == Op::Strexd) output << "g_cpu.R[" << unsigned(instruction.rd) << "] = runtime_strexd(g_cpu.R[" << unsigned(instruction.rn) << "], g_cpu.R[" << unsigned(instruction.rm) << "], g_cpu.R[" << unsigned(instruction.rm + 1u) << "]);\n";
+    else if (instruction.op == Op::Udf) output << "runtime_udf(0x" << std::hex << instruction.raw << "u, 0x" << instruction.pc << "u);\n";
     return output.str();
 }
 
@@ -346,9 +368,25 @@ struct PendingFunction {
 
     output << "// Generated locally from the external ROM. Never commit this file.\n"
               "#include <mk7/recomp/runtime.hpp>\n\n";
+    std::vector<std::ofstream> shard_outputs;
+    if (options.shards > 1) {
+        shard_outputs.reserve(options.shards);
+        for (std::uint32_t shard = 0; shard < options.shards; ++shard) {
+            auto path = options.output;
+            path.replace_filename(options.output.stem().string() + ".part" + std::to_string(shard) + ".cpp");
+            shard_outputs.emplace_back(path);
+            if (!shard_outputs.back()) throw std::runtime_error("cannot create generated shard");
+            shard_outputs.back() << "// Generated locally from the external ROM. Never commit this file.\n"
+                                    "#include <mk7/recomp/runtime.hpp>\n\n";
+        }
+    }
     map << "function_address,instruction_address,raw,operation,supported\n";
 
-    for (const auto& function : functions) output << "extern \"C\" void " << function.name << "();\n";
+    for (const auto& function : functions) {
+        output << "extern \"C\" void " << function.name << "();\n";
+        for (auto& shard : shard_outputs) shard << "extern \"C\" void " << function.name << "();\n";
+    }
+    for (auto& shard : shard_outputs) shard << '\n';
     output << "\nextern \"C\" const CtrGeneratedFunction mk7_generated_functions[] = {\n";
     for (const auto& function : functions) {
         output << "  {0x" << std::hex << function.address << "u, "
@@ -359,11 +397,13 @@ struct PendingFunction {
 
     bool supported = true;
     std::size_t emitted_bytes{};
+    std::size_t function_index{};
     for (const auto& function : functions) {
+        auto& body = options.shards == 1 ? output : shard_outputs[function_index++ % shard_outputs.size()];
         if (function.thumb) throw std::runtime_error("Thumb function emission is not implemented yet");
         if (function.instructions.empty()) continue;
 
-        output << "extern \"C\" void " << function.name << "() {\n";
+        body << "extern \"C\" void " << function.name << "() {\n";
         armv4t::CodegenCtx context;
         context.names_by_key = &names;
         context.current_function_addr = function.address;
@@ -375,27 +415,27 @@ struct PendingFunction {
         for (const auto pc : function.instructions) {
             if (!in_image(bytes, options, pc)) throw std::runtime_error("function instruction outside code image");
             const auto raw = read_word(bytes, pc - options.image_base);
-            output << "L_" << std::hex << std::uppercase << std::setw(8) << std::setfill('0') << pc << ": {\n";
+            body << "L_" << std::hex << std::uppercase << std::setw(8) << std::setfill('0') << pc << ": {\n";
             const auto extension = mk7::armv6k::decode(raw, pc);
             bool not_implemented = false;
             std::string operation;
             if (extension.op != mk7::armv6k::Op::Base) {
-                output << emit_special(extension);
+                body << emit_special(extension);
                 operation = "armv6k";
             } else {
                 const auto instruction = armv4t::ArmDecoder::decode(raw, pc);
                 operation = armv4t::ir_op_name(instruction.op);
-                output << armv4t::ArmCodegen::emit_instr(instruction, context, &not_implemented);
+                body << armv4t::ArmCodegen::emit_instr(instruction, context, &not_implemented);
                 not_implemented = not_implemented || instruction.is_undefined;
             }
-            output << "}\n";
+            body << "}\n";
             supported = supported && !not_implemented;
             emitted_bytes += 4;
             map << "0x" << std::hex << function.address << ",0x" << pc << ",0x"
                 << std::setw(8) << std::setfill('0') << raw << ',' << operation << ','
                 << (not_implemented ? "false" : "true") << '\n';
         }
-        output << "}\n\n";
+        body << "}\n\n";
     }
 
     output << "extern \"C\" void mk7_recomp_block_100000(){ "

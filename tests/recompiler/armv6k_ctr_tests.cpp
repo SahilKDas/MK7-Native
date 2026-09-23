@@ -15,4 +15,12 @@ int main() {
   { auto i=decode(0xe3a00000u,0x1020); assert(i.op==Op::Base); }
   { auto i=decode(0xed9f0a3du,0x1024); assert(i.op==Op::VfpLoadStore); }
   { auto i=decode(0xed2d8b02u,0x1028); assert(i.op==Op::VfpLoadStore); }
+  { assert(decode(0xe68ba01au,0x102c).op==Op::Pkhbt); }
+  { assert(decode(0xe6e76011u,0x1030).op==Op::Usat); }
+  { assert(decode(0xe6f70070u,0x1034).op==Op::Uxtah); }
+  { assert(decode(0xe6b20070u,0x1038).op==Op::Sxtah); }
+  { assert(decode(0xe6eb0079u,0x103c).op==Op::Uxtab); }
+  { assert(decode(0xe1bc0f9fu,0x1040).op==Op::Ldrexd); }
+  { assert(decode(0xe1ac6f90u,0x1044).op==Op::Strexd); }
+  { assert(decode(0xe7f000f0u,0x1048).op==Op::Udf); }
 }
