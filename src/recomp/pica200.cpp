@@ -101,4 +101,15 @@ bool pica200_run_vertex_shader(std::span<const PicaVec4> input,PicaVertexOutput&
   for(unsigned i=0;i<4;++i)if(descriptor&(1u<<(3-i)))dst[i]=result[i];
  }
  return false;
+}bool pica200_shade_and_rasterize_triangle(const std::array<std::span<const PicaVec4>,3>& inputs, PicaRasterTarget target, const PicaRasterState& state, unsigned position_output, unsigned color_output, unsigned uv_output) noexcept{
+ if(position_output>=16||color_output>=16||uv_output>=16)return false;
+ std::array<PicaRasterVertex,3> vertices{};
+ for(unsigned i=0;i<3;++i){
+  PicaVertexOutput output{};
+  if(!pica200_run_vertex_shader(inputs[i],output))return false;
+  vertices[i].clip=output.registers[position_output];
+  vertices[i].color=output.registers[color_output];
+  vertices[i].uv={output.registers[uv_output][0],output.registers[uv_output][1]};
+ }
+ return pica_rasterize_triangle(vertices,target,state);
 }

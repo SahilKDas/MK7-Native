@@ -27,6 +27,16 @@ int main(){
  const PicaVec4 vertex{1.25f,2.5f,-3.f,1.f};
  PicaVertexOutput shaded{};assert(pica200_run_vertex_shader(std::span<const PicaVec4>(&vertex,1),shaded));
  assert(shaded.registers[0]==vertex);
+ std::array<PicaVec4,3> triangle_inputs{{{-0.8f,-0.8f,0.25f,1.f},{0.8f,-0.8f,0.25f,1.f},{0.f,0.8f,0.25f,1.f}}};
+ std::array<std::span<const PicaVec4>,3> input_spans{};
+ for(unsigned i=0;i<3;++i)input_spans[i]=std::span<const PicaVec4>(&triangle_inputs[i],1);
+ std::array<std::uint32_t,64> triangle_pixels{};
+ std::array<float,64> triangle_depth{};triangle_depth.fill(1.f);
+ std::array<std::uint8_t,64> triangle_stencil{};
+ const PicaRasterTarget triangle_target{triangle_pixels,triangle_depth,triangle_stencil,8,8};
+ assert(pica200_shade_and_rasterize_triangle(input_spans,triangle_target,{},0,0,0));
+ assert(triangle_pixels[4*8+4]!=0);
+ assert(!pica200_shade_and_rasterize_triangle(input_spans,triangle_target,{},16,0,0));
  gpu_write(cursor,0x2cb,0);
  gpu_write(cursor,0x2cc,(0x13u<<26)|1u);
  gpu_write(cursor,0x2cc,0x22u<<26);

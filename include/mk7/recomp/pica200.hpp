@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <span>
 #include <array>
+#include <mk7/recomp/pica_raster.hpp>
 
 using PicaVec4 = std::array<float,4>;
 struct PicaVertexOutput { std::array<PicaVec4,16> registers{}; };
@@ -17,3 +18,5 @@ void pica200_set_framebuffer(unsigned screen,std::uint32_t address,std::uint32_t
 bool pica200_present(unsigned screen,std::span<std::uint32_t> rgba,unsigned width,unsigned height) noexcept;
 bool pica200_run_vertex_shader(std::span<const PicaVec4> inputs,PicaVertexOutput& output) noexcept;
 Pica200Snapshot pica200_snapshot() noexcept;
+
+bool pica200_shade_and_rasterize_triangle(const std::array<std::span<const PicaVec4>,3>& inputs, PicaRasterTarget target, const PicaRasterState& state, unsigned position_output, unsigned color_output, unsigned uv_output) noexcept;

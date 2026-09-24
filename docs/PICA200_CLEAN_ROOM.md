@@ -23,6 +23,24 @@ header word form a command; extra parameters write either the same register or
 consecutive registers, and command records are padded to eight-byte boundaries.
 See [GPU internal registers, Overview](https://www.3dbrew.org/wiki/GPU/Internal_Registers#Overview).
 
+## 2026-09-23 implementation status
+
+The repository now has a deterministic CPU triangle rasterizer (`pica_raster.cpp`)
+with perspective-correct color/UV interpolation, 2D nearest or bilinear RGBA
+sampling, depth and stencil tests/updates, basic blend equations/factors, and
+per-channel color masks. Synthetic tests cover triangle coverage, texturing,
+depth rejection, stencil writes, and alpha blending. An explicit
+`pica200_shade_and_rasterize_triangle` bridge runs three vertices through the
+supported shader-instruction subset and feeds selected output registers to
+that rasterizer. This bridge is for synthetic inputs; it does not decode guest
+vertex buffers or PICA output-map registers.
+
+These are not a complete PICA200 path. In particular, draw-trigger writes
+still increment a counter without producing pixels. The CPU reference does not
+yet cover clipping, culling, scissor, alpha test, tiled texture formats,
+combiners, framebuffer format writes, logic operations, lighting/fog, geometry
+shaders, or the full shader ISA. It is not a Vulkan guest-triangle renderer.
+Unsupported state must not be represented as successful game rendering.
 ## Hardware facts to build against
 
 | Stage | Publicly documented behavior | Boundary needing verification |
