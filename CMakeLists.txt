@@ -143,7 +143,11 @@ if(MK7_NATIVE_BUILD_TESTS)
   target_link_libraries(mk7_formats_tests PRIVATE MK7Native::formats)
   add_test(NAME mk7_formats_tests COMMAND mk7_formats_tests)
   if(MK7_NATIVE_BUILD_RECOMPILER)
-    add_executable(armv6k_ctr_tests tests/recompiler/armv6k_ctr_tests.cpp tools/recompiler/armv6k_ctr/armv6k_decode.cpp)
+    add_executable(armv6k_ctr_tests tests/recompiler/armv6k_ctr_tests.cpp tools/recompiler/armv6k_ctr/armv6k_decode.cpp
+      "${ARM_RECOMP_CORE_DIR}/common/arm_decode.cpp"
+      "${ARM_RECOMP_CORE_DIR}/common/thumb_decode.cpp"
+      "${ARM_RECOMP_CORE_DIR}/common/arm_ir.cpp"
+      "${ARM_RECOMP_CORE_DIR}/common/interpreter.cpp")
     target_compile_features(armv6k_ctr_tests PRIVATE cxx_std_23)
     target_include_directories(armv6k_ctr_tests PRIVATE tools/recompiler/armv6k_ctr "${ARM_RECOMP_CORE_DIR}/common")
     add_test(NAME armv6k_ctr_tests COMMAND armv6k_ctr_tests)

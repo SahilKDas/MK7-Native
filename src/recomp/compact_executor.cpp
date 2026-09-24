@@ -14,6 +14,7 @@ public:
  std::uint32_t instruction{};
  std::uint8_t read8(std::uint32_t a) override{return bus_read_u8(a);} std::uint16_t read16(std::uint32_t a) override{return bus_read_u16(a);} std::uint32_t read32(std::uint32_t a) override{return bus_read_u32(a);}
  void write8(std::uint32_t a,std::uint8_t v) override{bus_write_u8(a,v);} void write16(std::uint32_t a,std::uint16_t v) override{bus_write_u16(a,v);} void write32(std::uint32_t a,std::uint32_t v) override{bus_write_u32(a,v);}
+ bool supports_unaligned_access() const override{return true;}
  void coproc_write(std::uint32_t cp,std::uint32_t op1,std::uint32_t crn,std::uint32_t crm,std::uint32_t op2,std::uint32_t v) override{runtime_coproc_write(std::uint8_t(cp),std::uint8_t(op1),std::uint8_t(crn),std::uint8_t(crm),std::uint8_t(op2),v);}
  std::uint32_t coproc_read(std::uint32_t cp,std::uint32_t op1,std::uint32_t crn,std::uint32_t crm,std::uint32_t op2) override{return runtime_coproc_read(std::uint8_t(cp),std::uint8_t(op1),std::uint8_t(crn),std::uint8_t(crm),std::uint8_t(op2));}
  void coproc_cdp(std::uint32_t cp,std::uint32_t op1,std::uint32_t crn,std::uint32_t crm,std::uint32_t op2) override{runtime_coproc_cdp(std::uint8_t(cp),std::uint8_t(op1),std::uint8_t(crn),std::uint8_t(crm),std::uint8_t(op2),instruction);}
