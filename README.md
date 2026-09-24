@@ -97,6 +97,10 @@ MK7 also requests the console shared-data title `0004009B00010202` for Mii resou
 
     build/native/mk7-run.exe "C:/path/to/MARIO KART 7.cia" --ctrtool "C:/path/to/ctrtool.exe" --shared-data-romfs "C:/path/to/0004009B00010202.app.romfs"
 
+Alternatively, point directly at the dumped system-title CIA; its SHA-512 is reported and its RomFS exists only in the launch-time temporary directory:
+
+    build/native/mk7-run.exe "C:/path/to/MARIO KART 7.cia" --ctrtool "C:/path/to/ctrtool.exe" --shared-data-cia "C:/path/to/0004009B00010202.cia"
+
 The runner reads both images in place and retains no extracted game cache after exit.
 
 Azahar default controls: A/S/Z/X map to A/B/X/Y; T/G/F/H map to the D-pad; arrow keys map to the Circle Pad; Q/W map to L/R; M/N map to Start/Select. SDL gamepads use face buttons, shoulders, D-pad, Start/Back, and the left stick.

@@ -42,6 +42,7 @@ struct Options {
     std::filesystem::path cia;
     std::filesystem::path ctrtool = "ctrtool";
     std::filesystem::path shared_data_romfs;
+    std::filesystem::path shared_data_cia;
     std::uint64_t headless_slices{};
 };
 
@@ -50,10 +51,18 @@ public:
     TempDirectory()
         : path_{std::filesystem::temp_directory_path() /
                 ("mk7-native-exefs-" + std::to_string(GetCurrentProcessId()))} {
-        std::filesystem::create_directories(path_);
+        reclaim_stale();
+        std::error_code ec;
+        std::filesystem::remove_all(path_, ec);
+        if (!std::filesystem::create_directories(path_)) {
+            throw std::runtime_error{"unable to create temporary extraction directory"};
+        }
     }
 
-    ~TempDirectory() { std::filesystem::remove_all(path_); }
+    ~TempDirectory() {
+        std::error_code ec;
+        std::filesystem::remove_all(path_, ec);
+    }
 
     TempDirectory(const TempDirectory&) = delete;
     auto operator=(const TempDirectory&) -> TempDirectory& = delete;
@@ -61,6 +70,40 @@ public:
     [[nodiscard]] auto path() const noexcept -> const std::filesystem::path& { return path_; }
 
 private:
+    static auto is_running_mk7_process(DWORD process_id) noexcept -> bool {
+        const auto process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, process_id);
+        if (!process) return false;
+        std::array<wchar_t, 32768> image{};
+        DWORD size = static_cast<DWORD>(image.size());
+        const bool queried = QueryFullProcessImageNameW(process, 0, image.data(), &size) != FALSE;
+        CloseHandle(process);
+        return queried && std::filesystem::path{std::wstring_view{image.data(), size}}.filename() ==
+                              L"mk7-run.exe";
+    }
+
+    static void reclaim_stale() noexcept {
+        constexpr std::string_view prefix = "mk7-native-exefs-";
+        std::error_code ec;
+        const auto root = std::filesystem::temp_directory_path(ec);
+        if (ec) return;
+        for (std::filesystem::directory_iterator it{root, ec}, end; !ec && it != end; it.increment(ec)) {
+            if (!it->is_directory(ec)) continue;
+            const auto name = it->path().filename().string();
+            if (!name.starts_with(prefix) || name.size() == prefix.size()) continue;
+            DWORD process_id{};
+            bool numeric = true;
+            for (const char c : std::string_view{name}.substr(prefix.size())) {
+                if (c < '0' || c > '9') { numeric = false; break; }
+                process_id = process_id * 10u + static_cast<DWORD>(c - '0');
+            }
+            if (numeric && process_id != GetCurrentProcessId() &&
+                !is_running_mk7_process(process_id)) {
+                std::error_code remove_error;
+                std::filesystem::remove_all(it->path(), remove_error);
+            }
+        }
+    }
+
     std::filesystem::path path_;
 };
 
@@ -72,12 +115,17 @@ private:
             options.ctrtool = argv[++index];
         } else if (std::string_view{argv[index]} == "--shared-data-romfs" && index + 1 < argc) {
             options.shared_data_romfs = argv[++index];
+        } else if (std::string_view{argv[index]} == "--shared-data-cia" && index + 1 < argc) {
+            options.shared_data_cia = argv[++index];
         } else if (std::string_view{argv[index]} == "--headless-slices" && index + 1 < argc) {
             options.headless_slices = std::stoull(argv[++index]);
             if (!options.headless_slices) throw std::runtime_error{"headless slice count must be positive"};
         } else {
             throw std::runtime_error{"unknown argument: " + std::string{argv[index]}};
         }
+    }
+    if (!options.shared_data_romfs.empty() && !options.shared_data_cia.empty()) {
+        throw std::runtime_error{"choose either --shared-data-romfs or --shared-data-cia"};
     }
     return options;
 }
@@ -149,6 +197,32 @@ auto run_ctrtool(const Options& options, const std::filesystem::path& output) ->
     CloseHandle(process.hProcess);
     return static_cast<int>(exit_code);
 }
+auto extract_romfs(const std::filesystem::path& ctrtool, const std::filesystem::path& input,
+                   const std::filesystem::path& output) -> int {
+    const auto executable = ctrtool.wstring();
+    const auto quote = [](const std::wstring& value) {
+        if (value.contains(L'"')) throw std::runtime_error{"quotes are not supported in paths"};
+        return L"\"" + value + L"\"";
+    };
+    auto command = quote(executable) + L" --quiet --romfs=" + quote(output.wstring()) + L" " +
+                   quote(input.wstring());
+    std::vector<wchar_t> command_buffer(command.begin(), command.end());
+    command_buffer.push_back(L'\0');
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(executable.c_str(), command_buffer.data(), nullptr, nullptr, FALSE,
+                        CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process)) {
+        throw std::runtime_error{"unable to start ctrtool for shared-data CIA"};
+    }
+    WaitForSingleObject(process.hProcess, INFINITE);
+    DWORD exit_code{};
+    GetExitCodeProcess(process.hProcess, &exit_code);
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    return static_cast<int>(exit_code);
+}
+
 #else
 #error mk7-run currently requires Windows BCrypt and process APIs
 #endif
@@ -161,6 +235,13 @@ auto run_ctrtool(const Options& options, const std::filesystem::path& output) ->
     return std::vector<std::byte>{std::as_bytes(std::span{chars}).begin(),
                                   std::as_bytes(std::span{chars}).end()};
 }
+[[nodiscard]] auto is_ivfc_romfs(const std::filesystem::path& path) -> bool {
+    std::ifstream input{path, std::ios::binary};
+    std::array<char, 4> magic{};
+    return input.read(magic.data(), static_cast<std::streamsize>(magic.size())) &&
+           std::string_view{magic.data(), magic.size()} == "IVFC";
+}
+
 
 } // namespace
 
@@ -191,11 +272,25 @@ auto main(int argc, char** argv) -> int {
         std::copy(code.begin(), code.end(), memory.begin() + text_address);
         ctr_runtime_initialize(memory);
         ctr_runtime_set_romfs_root((extraction.path() / "romfs.bin").string());
-        if (!options.shared_data_romfs.empty()) {
-            if (!std::filesystem::is_regular_file(options.shared_data_romfs)) {
+        auto shared_data_romfs = options.shared_data_romfs;
+        if (!options.shared_data_cia.empty()) {
+            if (!std::filesystem::is_regular_file(options.shared_data_cia)) {
+                throw std::runtime_error{"shared-data CIA does not exist"};
+            }
+            std::cout << "[verify] shared-data CIA SHA-512=" << sha512(options.shared_data_cia) << '\n';
+            shared_data_romfs = extraction.path() / "0004009B00010202.romfs";
+            if (extract_romfs(options.ctrtool, options.shared_data_cia, shared_data_romfs) != 0) {
+                throw std::runtime_error{"shared-data CIA RomFS extraction failed"};
+            }
+        }
+        if (!shared_data_romfs.empty()) {
+            if (!std::filesystem::is_regular_file(shared_data_romfs)) {
                 throw std::runtime_error{"shared-data RomFS does not exist"};
             }
-            ctr_runtime_set_shared_data_romfs(options.shared_data_romfs.string());
+            if (!is_ivfc_romfs(shared_data_romfs)) {
+                throw std::runtime_error{"shared-data image is not an IVFC RomFS"};
+            }
+            ctr_runtime_set_shared_data_romfs(shared_data_romfs.string());
         }
         g_cpu.R[13] = ctr_main_stack_top;
         g_cpu.R[15] = text_address;
@@ -298,7 +393,9 @@ auto main(int argc, char** argv) -> int {
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "mk7-run: " << error.what() << '\n'
-                  << "usage: mk7-run <game.cia> [--ctrtool path/to/ctrtool] [--shared-data-romfs path/to/0004009B00010202.app.romfs] [--headless-slices N]\n";
+                  << "usage: mk7-run <game.cia> [--ctrtool path/to/ctrtool] "
+                     "[--shared-data-romfs path/to/0004009B00010202.app.romfs | "
+                     "--shared-data-cia path/to/0004009B00010202.cia] [--headless-slices N]\n";
         return 1;
     }
 }

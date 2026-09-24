@@ -39,7 +39,7 @@ build/native/mk7-run.exe "$MK7_CIA" --ctrtool path/to/ctrtool.exe `
   --shared-data-romfs "C:/path/to/0004009B00010202.app.romfs"
 ```
 
-The shared-data image supplies Mii resources requested through `ARCHIVE_SAVEDATA_AND_CONTENT`. It must be an extracted RomFS from the user's own `0004009B00010202` system-title dump. It is opened read-only at its external path and is never copied into the repository or persistent cache.
+The shared-data image supplies Mii resources requested through `ARCHIVE_SAVEDATA_AND_CONTENT`. It must be an extracted RomFS from the user's own `0004009B00010202` system-title dump. It is opened read-only at its external path and is never copied into the repository or persistent cache. The runner also accepts the original dump through `--shared-data-cia`; it prints the CIA SHA-512, extracts a validated IVFC RomFS into the launch-time temporary directory, and removes it on exit.
 
 ## Next correctness gates
 
