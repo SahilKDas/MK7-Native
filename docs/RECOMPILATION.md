@@ -35,8 +35,12 @@ cmake --build build/native --target mk7-run
 Run `mk7-run` with the same external CIA and ctrtool. The runner verifies and extracts locally, initializes the CTR memory map, executes the generated entry closure, then keeps a resizable SDL3/Vulkan diagnostic window alive. The current 79% closure registers 29,954 functions, compiles 4,526,956 mapped bytes (1,131,739 ARM instructions), and reaches the real startup `SVC 0x21` at guest PC `0x00101564`. The Vulkan host now presents valid guest top and bottom framebuffers. The first PICA200 slice decodes command headers, masked and consecutive register writes, draw triggers, memory fills, copies, GSP queue submission, and framebuffer swaps; unsupported shader/raster state remains future work.
 
 ```powershell
-build/native/mk7-run.exe "$MK7_CIA" --ctrtool path/to/ctrtool.exe
+build/native/mk7-run.exe "$MK7_CIA" --ctrtool path/to/ctrtool.exe `
+  --shared-data-romfs "C:/path/to/0004009B00010202.app.romfs"
 ```
+
+The shared-data image supplies Mii resources requested through `ARCHIVE_SAVEDATA_AND_CONTENT`. It must be an extracted RomFS from the user's own `0004009B00010202` system-title dump. It is opened read-only at its external path and is never copied into the repository or persistent cache.
+
 ## Next correctness gates
 
 1. Import trustworthy USA Rev2 mk7re function metadata and expand the verified call closure.

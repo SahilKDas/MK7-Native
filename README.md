@@ -58,6 +58,7 @@ workflow, current architecture limits, and correctness gates.
 
 The game CIA remains wherever the user stores it; pass its absolute path to
 `mk7-run`. MK7-Native never copies the full ROM into the source or build tree.
+The optional system shared-data RomFS is also streamed from its original path.
 
 ---
 
@@ -91,5 +92,11 @@ CMake verifies the configured SHA-512, extracts ExeFS only beneath the build dir
 ## Native visual host
 
 `mk7-run` now creates a resizable SDL3/Vulkan window after loading the verified external ROM. It presents guest top and bottom framebuffers through Vulkan after GSP buffer swaps, with the diagnostic surfaces retained until a valid guest framebuffer is available. The initial PICA200 path decodes masked command-list register writes, draw triggers, GX memory fills, copies, and shared command-queue submission.
+
+MK7 also requests the console shared-data title `0004009B00010202` for Mii resources. Extract its RomFS from your own 3DS dump, keep it outside the repository, and pass it without copying:
+
+    build/native/mk7-run.exe "C:/path/to/MARIO KART 7.cia" --ctrtool "C:/path/to/ctrtool.exe" --shared-data-romfs "C:/path/to/0004009B00010202.app.romfs"
+
+The runner reads both images in place and retains no extracted game cache after exit.
 
 Azahar default controls: A/S/Z/X map to A/B/X/Y; T/G/F/H map to the D-pad; arrow keys map to the Circle Pad; Q/W map to L/R; M/N map to Start/Select. SDL gamepads use face buttons, shoulders, D-pad, Start/Back, and the left stick.

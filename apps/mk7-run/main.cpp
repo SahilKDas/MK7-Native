@@ -41,6 +41,7 @@ constexpr std::size_t expected_code_size = 0x00577000u;
 struct Options {
     std::filesystem::path cia;
     std::filesystem::path ctrtool = "ctrtool";
+    std::filesystem::path shared_data_romfs;
     std::uint64_t headless_slices{};
 };
 
@@ -69,6 +70,8 @@ private:
     for (auto index = 2; index < argc; ++index) {
         if (std::string_view{argv[index]} == "--ctrtool" && index + 1 < argc) {
             options.ctrtool = argv[++index];
+        } else if (std::string_view{argv[index]} == "--shared-data-romfs" && index + 1 < argc) {
+            options.shared_data_romfs = argv[++index];
         } else if (std::string_view{argv[index]} == "--headless-slices" && index + 1 < argc) {
             options.headless_slices = std::stoull(argv[++index]);
             if (!options.headless_slices) throw std::runtime_error{"headless slice count must be positive"};
@@ -188,6 +191,12 @@ auto main(int argc, char** argv) -> int {
         std::copy(code.begin(), code.end(), memory.begin() + text_address);
         ctr_runtime_initialize(memory);
         ctr_runtime_set_romfs_root((extraction.path() / "romfs.bin").string());
+        if (!options.shared_data_romfs.empty()) {
+            if (!std::filesystem::is_regular_file(options.shared_data_romfs)) {
+                throw std::runtime_error{"shared-data RomFS does not exist"};
+            }
+            ctr_runtime_set_shared_data_romfs(options.shared_data_romfs.string());
+        }
         g_cpu.R[13] = ctr_main_stack_top;
         g_cpu.R[15] = text_address;
         std::cout << "[memory] initialized 384 MiB CTR user map; SP=0x10000000\n";
@@ -289,7 +298,7 @@ auto main(int argc, char** argv) -> int {
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "mk7-run: " << error.what() << '\n'
-                  << "usage: mk7-run <game.cia> [--ctrtool path/to/ctrtool] [--headless-slices N]\n";
+                  << "usage: mk7-run <game.cia> [--ctrtool path/to/ctrtool] [--shared-data-romfs path/to/0004009B00010202.app.romfs] [--headless-slices N]\n";
         return 1;
     }
 }
