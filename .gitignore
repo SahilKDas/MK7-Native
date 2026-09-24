@@ -11,3 +11,6 @@
 *.cxi
 *.romfs
 *.exefs
+
+# Independent GPL companion repository; add it as a submodule after publishing.
+/MK7-Mii-Bridge/
