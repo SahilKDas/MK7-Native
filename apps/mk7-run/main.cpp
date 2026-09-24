@@ -189,6 +189,7 @@ auto main(int argc, char** argv) -> int {
         ctr_runtime_initialize(memory);
         ctr_runtime_set_romfs_root((extraction.path() / "romfs.bin").string());
         g_cpu.R[13] = ctr_main_stack_top;
+        g_cpu.R[15] = text_address;
         std::cout << "[memory] initialized 384 MiB CTR user map; SP=0x10000000\n";
 
 #ifdef MK7_COMPACT_EXECUTION
