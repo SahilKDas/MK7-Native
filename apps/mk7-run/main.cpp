@@ -1,4 +1,5 @@
 #include <mk7/recomp/runtime.hpp>
+#include <mk7/mii/bridge.hpp>
 #ifdef MK7_COMPACT_EXECUTION
 #include <mk7/recomp/compact_executor.hpp>
 #endif
@@ -43,6 +44,8 @@ struct Options {
     std::filesystem::path ctrtool = "ctrtool";
     std::filesystem::path shared_data_romfs;
     std::filesystem::path shared_data_cia;
+    std::filesystem::path mii_bridge;
+    std::filesystem::path mii_profile;
     std::uint64_t headless_slices{};
 };
 
@@ -117,6 +120,10 @@ private:
             options.shared_data_romfs = argv[++index];
         } else if (std::string_view{argv[index]} == "--shared-data-cia" && index + 1 < argc) {
             options.shared_data_cia = argv[++index];
+        } else if (std::string_view{argv[index]} == "--mii-bridge" && index + 1 < argc) {
+            options.mii_bridge = argv[++index];
+        } else if (std::string_view{argv[index]} == "--mii-profile" && index + 1 < argc) {
+            options.mii_profile = argv[++index];
         } else if (std::string_view{argv[index]} == "--headless-slices" && index + 1 < argc) {
             options.headless_slices = std::stoull(argv[++index]);
             if (!options.headless_slices) throw std::runtime_error{"headless slice count must be positive"};
@@ -273,6 +280,11 @@ auto main(int argc, char** argv) -> int {
         ctr_runtime_initialize(memory);
         ctr_runtime_set_romfs_root((extraction.path() / "romfs.bin").string());
         auto shared_data_romfs = options.shared_data_romfs;
+        auto bridge_executable = options.mii_bridge;
+        if (bridge_executable.empty()) {
+            const std::array candidates{std::filesystem::path{"MK7-Mii-Bridge/build/mk7-mii-bridge.exe"},std::filesystem::path{"MK7-Mii-Bridge/build/Release/mk7-mii-bridge.exe"}};
+            for (const auto& candidate : candidates) if (std::filesystem::is_regular_file(candidate)) { bridge_executable = candidate; break; }
+        }
         if (!options.shared_data_cia.empty()) {
             if (!std::filesystem::is_regular_file(options.shared_data_cia)) {
                 throw std::runtime_error{"shared-data CIA does not exist"};
@@ -282,6 +294,17 @@ auto main(int argc, char** argv) -> int {
             if (extract_romfs(options.ctrtool, options.shared_data_cia, shared_data_romfs) != 0) {
                 throw std::runtime_error{"shared-data CIA RomFS extraction failed"};
             }
+        }
+        if (shared_data_romfs.empty() && !bridge_executable.empty()) {
+            auto profile = options.mii_profile;
+            if (profile.empty()) {
+                const auto appdata = std::getenv("APPDATA");
+                profile = (appdata ? std::filesystem::path{appdata} : std::filesystem::current_path()) / "MK7-Native/player.mii.json";
+            }
+            mk7::mii::BridgeAdapter bridge{bridge_executable, profile};
+            const auto artifacts = bridge.prepare(extraction.path() / "mii-bridge");
+            shared_data_romfs = artifacts.romfs;
+            std::cout << "[mii] GPL bridge protocol 1 active; profile=" << artifacts.profile << '\n';
         }
         if (!shared_data_romfs.empty()) {
             if (!std::filesystem::is_regular_file(shared_data_romfs)) {
@@ -395,7 +418,8 @@ auto main(int argc, char** argv) -> int {
         std::cerr << "mk7-run: " << error.what() << '\n'
                   << "usage: mk7-run <game.cia> [--ctrtool path/to/ctrtool] "
                      "[--shared-data-romfs path/to/0004009B00010202.app.romfs | "
-                     "--shared-data-cia path/to/0004009B00010202.cia] [--headless-slices N]\n";
+                     "--shared-data-cia path/to/0004009B00010202.cia] [--mii-bridge path/to/mk7-mii-bridge.exe] "
+                     "[--mii-profile path/to/player.mii.json] [--headless-slices N]\n";
         return 1;
     }
 }

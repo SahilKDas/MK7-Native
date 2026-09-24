@@ -101,6 +101,8 @@ Alternatively, point directly at the dumped system-title CIA; its SHA-512 is rep
 
     build/native/mk7-run.exe "C:/path/to/MARIO KART 7.cia" --ctrtool "C:/path/to/ctrtool.exe" --shared-data-cia "C:/path/to/0004009B00010202.cia"
 
+When the nested GPL companion has been built, `mk7-run` automatically negotiates protocol 1, creates `%APPDATA%/MK7-Native/player.mii.json`, renders an original avatar preview, and generates a disposable neutral RomFS. Override discovery with `--mii-bridge` and the profile with `--mii-profile`. The programs remain separate processes and share no linked code.
+
 The runner reads both images in place and retains no extracted game cache after exit.
 
 Azahar default controls: A/S/Z/X map to A/B/X/Y; T/G/F/H map to the D-pad; arrow keys map to the Circle Pad; Q/W map to L/R; M/N map to Start/Select. SDL gamepads use face buttons, shoulders, D-pad, Start/Back, and the left stick.
