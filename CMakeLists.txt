@@ -7,7 +7,7 @@ set(MK7_ROM_PATH "" CACHE FILEPATH "Path to the legally obtained MK7 CIA (read i
 set(CTRTOOL_PATH "" CACHE FILEPATH "Path to ctrtool")
 set(MK7_SYMBOL_MAP "" CACHE FILEPATH "Optional mk7re/Ghidra/IDA function map")
 set(MK7_COVERAGE_PERMILLE 798 CACHE STRING "Minimum validated executable-code closure in permille")
-set(MK7_INDIRECT_ENTRY_SEEDS "0x005EA0D4" CACHE STRING "Semicolon-separated ARM function entries observed through indirect branches")
+set(MK7_INDIRECT_ENTRY_SEEDS "0x005EA0D4;0x0053CE54" CACHE STRING "Semicolon-separated ARM function entries observed through indirect branches")
 set(MK7_TEXT_SIZE 0x004EB57C CACHE STRING "Authoritative executable text size from the supported CIA exheader")
 set(MK7_GENERATED_SHARDS 64 CACHE STRING "Generated C++ translation units for scalable compilation")
 set(ZIG_EXECUTABLE "" CACHE FILEPATH "Path to the Zig compiler used for generated-map verification")
