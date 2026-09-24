@@ -192,8 +192,20 @@ auto main(int argc, char** argv) -> int {
         } else {
             std::cout << "[boot] no SVC reached; PC=0x" << std::hex << startup.pc << std::dec << '\n';
         }
+        bool first_resume = true;
         while (host.poll()) {
-            if (!runtime_unwinding()) ctr_runtime_resume();
+            if (!runtime_unwinding()) {
+                if (first_resume) std::cout << "[boot] resuming generated code at PC=0x" << std::hex << g_cpu.R[15] << std::dec << '\n';
+                ctr_runtime_resume();
+                if (first_resume) {
+                    const auto resumed = ctr_runtime_snapshot();
+                    std::cout << "[boot] first slice returned; PC=0x" << std::hex << resumed.pc
+                              << ", dispatch=0x" << resumed.last_dispatch << std::dec
+                              << ", instructions=" << resumed.instructions
+                              << ", unwinding=" << resumed.unwinding << '\n';
+                    first_resume = false;
+                }
+            }
             host.render(ctr_runtime_snapshot());
         }
         return 0;
