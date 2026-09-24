@@ -127,7 +127,8 @@ auto run_ctrtool(const Options& options, const std::filesystem::path& output) ->
         return L"\"" + value + L"\"";
     };
     auto command = quote(executable) + L" --quiet --decompresscode --exefsdir=" +
-                   quote(output.wstring()) + L" " + quote(options.cia.wstring());
+                   quote(output.wstring()) + L" --romfsdir=" +
+                   quote((output / "romfs").wstring()) + L" " + quote(options.cia.wstring());
     std::vector<wchar_t> command_buffer(command.begin(), command.end());
     command_buffer.push_back(L'\0');
 
@@ -186,6 +187,7 @@ auto main(int argc, char** argv) -> int {
         std::vector<std::byte> memory(ctr_user_address_space_size);
         std::copy(code.begin(), code.end(), memory.begin() + text_address);
         ctr_runtime_initialize(memory);
+        ctr_runtime_set_romfs_root((extraction.path() / "romfs").string());
         g_cpu.R[13] = ctr_main_stack_top;
         std::cout << "[memory] initialized 256 MiB CTR user map; SP=0x10000000\n";
 
