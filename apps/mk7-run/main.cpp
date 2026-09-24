@@ -153,6 +153,7 @@ auto run_ctrtool(const Options& options, const std::filesystem::path& output) ->
 } // namespace
 
 auto main(int argc, char** argv) -> int {
+    std::cout << std::unitbuf;
     try {
         const auto options = options_from(argc, argv);
         mk7::host::Application host;
