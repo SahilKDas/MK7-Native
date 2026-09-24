@@ -4,6 +4,7 @@
 #include <cstring>
 #include <cmath>
 #include <bit>
+#include <vector>
 
 namespace {
 std::span<std::byte> memory;
@@ -18,6 +19,7 @@ std::array<std::uint32_t,4> uniform_words{};
 bool uniform_float32{};
 float decode_f24(std::uint32_t value){const std::uint32_t sign=(value&0x800000u)<<8,exponent=(value>>16)&0x7fu,mantissa=value&0xffffu;if(exponent==0)return std::bit_cast<float>(sign|mantissa);if(exponent==0x7f)return std::bit_cast<float>(sign|0x7f800000u|(mantissa<<7));return std::bit_cast<float>(sign|((exponent+64u)<<23)|(mantissa<<7));}
 template<class T> bool load(std::uint32_t address,T& value){if(std::uint64_t(address)+sizeof(T)>memory.size())return false;std::memcpy(&value,memory.data()+address,sizeof(T));return true;}
+bool execute_draw_arrays() noexcept;
 void write_register(std::uint32_t id,std::uint32_t value,std::uint32_t mask){
  if(id>=registers.size())return;
  auto& current=registers[id];for(unsigned byte=0;byte<4;++byte)if(mask&(1u<<byte)){const auto bits=0xffu<<(byte*8);current=(current&~bits)|(value&bits);}
@@ -28,7 +30,7 @@ else if(id==0x2d5)descriptor_index=current&4095u;
 else if(id>=0x2d6&&id<=0x2dd){shader_descriptors[descriptor_index++&4095u]=current;}
 else if(id==0x2c0){uniform_index=current&0x7fu;uniform_float32=(current>>31)!=0;uniform_word_count=0;}
 else if(id>=0x2c1&&id<=0x2c8){uniform_words[uniform_word_count++&3u]=current;const auto needed=uniform_float32?4u:3u;if(uniform_word_count==needed){if(uniform_index<96){if(uniform_float32){for(unsigned i=0;i<4;++i)uniforms[uniform_index][3-i]=std::bit_cast<float>(uniform_words[i]);}else{const std::uint64_t low=std::uint64_t(uniform_words[0])|(std::uint64_t(uniform_words[1])<<32);const std::uint64_t high=uniform_words[2];const std::uint32_t components[4]{std::uint32_t((high>>16)&0xffffffu),std::uint32_t(((high&0xffffu)<<8)|(low>>56)),std::uint32_t((low>>32)&0xffffffu),std::uint32_t(low&0xffffffu)};for(unsigned i=0;i<4;++i)uniforms[uniform_index][i]=decode_f24(components[i]);}}++uniform_index;uniform_word_count=0;}}
-if(id==0x22e||id==0x22f)++stats.draw_calls;
+if(id==0x22e||id==0x22f){++stats.draw_calls;if(id==0x22e&&execute_draw_arrays())++stats.draws_rendered;else ++stats.draws_unsupported;}
 }
 std::uint32_t decode_pixel(std::uint32_t address,std::uint32_t format){
  auto byte=[&](unsigned n){return std::uint32_t(static_cast<std::uint8_t>(memory[address+n]));};
@@ -112,4 +114,40 @@ bool pica200_run_vertex_shader(std::span<const PicaVec4> input,PicaVertexOutput&
   vertices[i].uv={output.registers[uv_output][0],output.registers[uv_output][1]};
  }
  return pica_rasterize_triangle(vertices,target,state);
+}namespace {
+bool execute_draw_arrays() noexcept{
+ // This intentionally narrow path accepts one float4 position stream, plain
+ // triangle lists, an RGBA8 linear target, and no fragment side effects.
+ if((registers[0x202]>>16)!=0 || registers[0x201]!=0x0fu ||
+    registers[0x204]!=0 || registers[0x205]!=((1u<<28)|(16u<<16)) ||
+    (registers[0x25e]&0x300u)!=0 || registers[0x229]!=0 ||
+    registers[0x117]!=2u || registers[0x100]!=0 ||
+    (registers[0x107]&(0xfu<<8))!=(0xfu<<8))return false;
+ const auto count=registers[0x228], first=registers[0x22a];
+ if(count<3||count>4096||count%3u)return false;
+ const auto width=registers[0x11e]&0x7ffu,height=((registers[0x11e]>>12)&0x3ffu)+1u;
+ if(!width||width>1024||height>1024)return false;
+ const std::uint64_t color_address=std::uint64_t(registers[0x11d]&0x0fffffffu)<<3;
+ const std::uint64_t vertex_address=(std::uint64_t(registers[0x200]&0x1fffffffu)<<3)+registers[0x203];
+ const auto pixel_count=std::uint64_t(width)*height;
+ if(color_address+pixel_count*4>memory.size()||vertex_address+(std::uint64_t(first)+count)*16>memory.size())return false;
+ std::vector<std::uint32_t> pixels(static_cast<std::size_t>(pixel_count));
+ std::memcpy(pixels.data(),memory.data()+color_address,pixels.size()*4);
+ std::vector<float> depth(pixels.size(),1.f);
+ std::vector<std::uint8_t> stencil(pixels.size());
+ PicaRasterTarget target{pixels,depth,stencil,width,height};
+ PicaRasterState state{};
+ std::array<PicaRasterVertex,3> triangle{};
+ for(std::uint32_t i=0;i<count;++i){
+  PicaVec4 position{};
+  std::memcpy(position.data(),memory.data()+vertex_address+(std::uint64_t(first)+i)*16,16);
+  PicaVertexOutput output{};
+  if(!pica200_run_vertex_shader(std::span<const PicaVec4>(&position,1),output))return false;
+  triangle[i%3].clip=output.registers[0];
+  triangle[i%3].color={1.f,1.f,1.f,1.f};
+  if(i%3==2&&!pica_rasterize_triangle(triangle,target,state))return false;
+ }
+ std::memcpy(memory.data()+color_address,pixels.data(),pixels.size()*4);
+ return true;
+}
 }

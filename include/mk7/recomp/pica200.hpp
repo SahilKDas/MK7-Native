@@ -8,7 +8,7 @@
 using PicaVec4 = std::array<float,4>;
 struct PicaVertexOutput { std::array<PicaVec4,16> registers{}; };
 struct Pica200Snapshot {
- std::uint64_t command_lists{}, register_writes{}, draw_calls{}, memory_fills{};
+ std::uint64_t command_lists{}, register_writes{}, draw_calls{}, draws_rendered{}, draws_unsupported{}, memory_fills{};
  std::uint32_t last_register{}, last_value{};
 };
 void pica200_reset(std::span<std::byte> memory) noexcept;
