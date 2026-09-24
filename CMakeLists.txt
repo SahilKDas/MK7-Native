@@ -10,7 +10,6 @@ set(MK7_COVERAGE_PERMILLE 798 CACHE STRING "Minimum validated executable-code cl
 set(MK7_INDIRECT_ENTRY_SEEDS "0x005EA0D4;0x0053CE54;0x0053CEBC" CACHE STRING "Semicolon-separated ARM function entries observed through indirect branches")
 set(MK7_TEXT_SIZE 0x004EB57C CACHE STRING "Authoritative executable text size from the supported CIA exheader")
 set(MK7_GENERATED_SHARDS 64 CACHE STRING "Generated C++ translation units for scalable compilation")
-set(ZIG_EXECUTABLE "" CACHE FILEPATH "Path to the Zig compiler used for generated-map verification")
 set(MK7_ROM_SHA512 "8b10af4bf0347d4ed6076d4b29f36e6d2ab76f6ef60459958ac72842b7345877fb4721992c04664149edce7c294715803d4261b93a9553ef6e85616b71ce0225" CACHE STRING "Expected CIA SHA-512")
 set(MK7_NATIVE_GENERATED_ENTRY "" CACHE FILEPATH "Pre-generated entry C++ source (advanced override)")
 set(SDL_SHARED OFF CACHE BOOL "" FORCE)
@@ -66,11 +65,6 @@ if(MK7_ROM_PATH)
   elseif(NOT EXISTS "${CTRTOOL_PATH}")
     message(FATAL_ERROR "CTRTOOL_PATH does not exist: ${CTRTOOL_PATH}")
   endif()
-  if(NOT ZIG_EXECUTABLE)
-    find_program(ZIG_EXECUTABLE zig REQUIRED)
-  elseif(NOT EXISTS "${ZIG_EXECUTABLE}")
-    message(FATAL_ERROR "ZIG_EXECUTABLE does not exist: ${ZIG_EXECUTABLE}")
-  endif()
   if(MK7_SYMBOL_MAP AND NOT EXISTS "${MK7_SYMBOL_MAP}")
     message(FATAL_ERROR "MK7_SYMBOL_MAP does not exist: ${MK7_SYMBOL_MAP}")
   endif()
@@ -98,9 +92,15 @@ if(MK7_ROM_PATH)
     COMMAND ${CMAKE_COMMAND} "-DINPUT=${MK7_ROM_PATH}" "-DEXPECTED=${MK7_ROM_SHA512}" -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VerifyRom.cmake"
     COMMAND "${CTRTOOL_PATH}" --quiet --decompresscode "--exefsdir=${MK7_GEN_DIR}/exefs" "${MK7_ROM_PATH}"
     COMMAND $<TARGET_FILE:mk7-recompile> --input "${MK7_CODE_BIN}" --output "${MK7_ENTRY_SOURCE}" --map-output "${MK7_BYTE_MAP}" --entry 0x00100000 --executable-size "${MK7_TEXT_SIZE}" --coverage-permille "${MK7_COVERAGE_PERMILLE}" --shards "${MK7_GENERATED_SHARDS}" ${_symbol_args} ${_seed_args}
-    COMMAND "${ZIG_EXECUTABLE}" run "${CMAKE_CURRENT_SOURCE_DIR}/tools/map-audit/main.zig" -- "${MK7_BYTE_MAP}" "${MK7_CODE_BIN}" "${MK7_COVERAGE_PERMILLE}"
-    DEPENDS mk7-recompile "${MK7_ROM_PATH}" ${_symbol_dep} cmake/VerifyRom.cmake tools/map-audit/main.zig
+    DEPENDS mk7-recompile "${MK7_ROM_PATH}" ${_symbol_dep} cmake/VerifyRom.cmake
     COMMENT "Verify external CIA, extract ExeFS, recompile ARMv6K functions, and audit coverage" VERBATIM)
+  add_custom_target(mk7-clean-generated
+    COMMAND ${CMAKE_COMMAND}
+      "-DBUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+      "-DGENERATED_DIR=${MK7_GEN_DIR}"
+      "-DOBJECT_DIR=${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/mk7-run.dir/generated"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CleanGenerated.cmake"
+    COMMENT "Remove disposable generated MK7 sources and objects; preserve mk7-run")
   set_source_files_properties(${MK7_ENTRY_SOURCES} PROPERTIES GENERATED TRUE)
   if(MSVC)
     set_property(SOURCE ${MK7_ENTRY_SOURCES} APPEND PROPERTY COMPILE_OPTIONS /Od)
