@@ -1,4 +1,7 @@
 #include <mk7/recomp/runtime.hpp>
+#ifdef MK7_COMPACT_EXECUTION
+#include <mk7/recomp/compact_executor.hpp>
+#endif
 #include <mk7/recomp/pica200.hpp>
 #include <mk7/host/application.hpp>
 
@@ -186,7 +189,12 @@ auto main(int argc, char** argv) -> int {
         g_cpu.R[13] = ctr_main_stack_top;
         std::cout << "[memory] initialized 256 MiB CTR user map; SP=0x10000000\n";
 
+#ifdef MK7_COMPACT_EXECUTION
+        ctr_compact_reset();
+        ctr_compact_run_slice();
+#else
         mk7_recomp_block_100000();
+#endif
         std::cout << "[recomp] entry block executed; next PC=0x" << std::hex
                   << ctr_runtime_last_dispatch() << std::dec << '\n';
 
@@ -199,7 +207,11 @@ auto main(int argc, char** argv) -> int {
         }
         if (options.headless_slices) {
             for (std::uint64_t slice = 0; slice < options.headless_slices && !runtime_unwinding(); ++slice) {
+#ifdef MK7_COMPACT_EXECUTION
+                ctr_compact_run_slice();
+#else
                 ctr_runtime_resume();
+#endif
             }
             const auto progress = ctr_runtime_snapshot();
             const auto gpu = pica200_snapshot();
@@ -219,7 +231,11 @@ auto main(int argc, char** argv) -> int {
                       << ", r6=0x" << g_cpu.R[6]
                       << ", r7=0x" << g_cpu.R[7]
                       << ", sp=0x" << g_cpu.R[13]
-                      << ", lr=0x" << g_cpu.R[14] << std::dec << '\n';
+                      << ", lr=0x" << g_cpu.R[14]
+                      << ", raw=0x" << bus_read_u32(progress.pc & ~3u)
+                      << ", s0=0x" << runtime_vfp_word(0)
+                      << ", s1=0x" << runtime_vfp_word(1)
+                      << ", s2=0x" << runtime_vfp_word(2) << std::dec << '\n';
             return progress.unwinding ? 2 : 0;
         }
 
@@ -228,7 +244,11 @@ auto main(int argc, char** argv) -> int {
         while (host.poll()) {
             if (!runtime_unwinding()) {
                 if (first_resume) std::cout << "[boot] resuming generated code at PC=0x" << std::hex << g_cpu.R[15] << std::dec << '\n';
+#ifdef MK7_COMPACT_EXECUTION
+                ctr_compact_run_slice();
+#else
                 ctr_runtime_resume();
+#endif
                 if (first_resume) {
                     const auto resumed = ctr_runtime_snapshot();
                     std::cout << "[boot] first slice returned; PC=0x" << std::hex << resumed.pc
@@ -254,7 +274,11 @@ auto main(int argc, char** argv) -> int {
                       << ", r6=0x" << g_cpu.R[6]
                       << ", r7=0x" << g_cpu.R[7]
                       << ", sp=0x" << g_cpu.R[13]
-                      << ", lr=0x" << g_cpu.R[14] << std::dec << '\n';
+                      << ", lr=0x" << g_cpu.R[14]
+                      << ", raw=0x" << bus_read_u32(progress.pc & ~3u)
+                      << ", s0=0x" << runtime_vfp_word(0)
+                      << ", s1=0x" << runtime_vfp_word(1)
+                      << ", s2=0x" << runtime_vfp_word(2) << std::dec << '\n';
                 }
             }
             host.render(ctr_runtime_snapshot());

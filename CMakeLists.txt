@@ -3,6 +3,7 @@ project(MK7Native VERSION 0.2.0 LANGUAGES CXX)
 
 option(MK7_NATIVE_BUILD_TESTS "Build the MK7-Native test suite" ON)
 option(MK7_NATIVE_BUILD_RECOMPILER "Build the ARMv6K CTR static recompiler" ON)
+option(MK7_NATIVE_STATIC_RECOMPILATION "Emit and compile verbose per-instruction C++ (high disk usage)" OFF)
 set(MK7_ROM_PATH "" CACHE FILEPATH "Path to the legally obtained MK7 CIA (read in place; never copied)")
 set(CTRTOOL_PATH "" CACHE FILEPATH "Path to ctrtool")
 set(MK7_SYMBOL_MAP "" CACHE FILEPATH "Optional mk7re/Ghidra/IDA function map")
@@ -53,7 +54,7 @@ endif()
 
 set(MK7_ENTRY_SOURCE src/recomp/entry_stub.cpp)
 set(MK7_ENTRY_SOURCES "${MK7_ENTRY_SOURCE}")
-if(MK7_ROM_PATH)
+if(MK7_ROM_PATH AND MK7_NATIVE_STATIC_RECOMPILATION)
   if(NOT MK7_NATIVE_BUILD_RECOMPILER)
     message(FATAL_ERROR "MK7_ROM_PATH requires MK7_NATIVE_BUILD_RECOMPILER=ON")
   endif()
@@ -116,6 +117,16 @@ elseif(MK7_NATIVE_GENERATED_ENTRY)
 endif()
 
 add_executable(mk7-run apps/mk7-run/main.cpp src/recomp/runtime.cpp ${MK7_ENTRY_SOURCES})
+if(NOT MK7_NATIVE_STATIC_RECOMPILATION)
+  target_sources(mk7-run PRIVATE src/recomp/compact_executor.cpp
+    external/arm-recomp-core/common/arm_decode.cpp
+    external/arm-recomp-core/common/thumb_decode.cpp
+    external/arm-recomp-core/common/arm_ir.cpp
+    external/arm-recomp-core/common/interpreter.cpp
+    tools/recompiler/armv6k_ctr/armv6k_decode.cpp)
+  target_include_directories(mk7-run PRIVATE external/arm-recomp-core/common tools/recompiler/armv6k_ctr)
+  target_compile_definitions(mk7-run PRIVATE MK7_COMPACT_EXECUTION=1)
+endif()
 target_compile_features(mk7-run PRIVATE cxx_std_23)
 target_include_directories(mk7-run PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(mk7-run PRIVATE mk7_host)

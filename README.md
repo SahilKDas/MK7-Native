@@ -77,6 +77,8 @@ This project is licensed under the BSD 3-Clause License. See the [LICENSE](LICEN
 
 The CIA stays at its original location and is never copied into this repository. Configure a build with:
 
+Compact execution is the default: the verified code image is extracted to a temporary directory at launch and executed through the ARMv6K runtime without emitting per-instruction C++. The verbose static-recompilation pipeline is retained only for focused development with `-DMK7_NATIVE_STATIC_RECOMPILATION=ON`.
+
     cmake -S . -B build/native -G Ninja -DMK7_ROM_PATH="C:/path/to/MARIO KART 7.cia" -DCTRTOOL_PATH="C:/path/to/ctrtool.exe"
     cmake --build build/native --target mk7-run
 

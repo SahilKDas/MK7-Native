@@ -1,0 +1,26 @@
+#include <mk7/recomp/compact_executor.hpp>
+#include <mk7/recomp/runtime.hpp>
+#include "arm_decode.h"
+#include "thumb_decode.h"
+#include "interpreter.h"
+#include "armv6k_decode.hpp"
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+namespace {
+class CtrBus final : public armv4t::Bus {
+public:
+ std::uint32_t instruction{};
+ std::uint8_t read8(std::uint32_t a) override{return bus_read_u8(a);} std::uint16_t read16(std::uint32_t a) override{return bus_read_u16(a);} std::uint32_t read32(std::uint32_t a) override{return bus_read_u32(a);}
+ void write8(std::uint32_t a,std::uint8_t v) override{bus_write_u8(a,v);} void write16(std::uint32_t a,std::uint16_t v) override{bus_write_u16(a,v);} void write32(std::uint32_t a,std::uint32_t v) override{bus_write_u32(a,v);}
+ void coproc_write(std::uint32_t cp,std::uint32_t op1,std::uint32_t crn,std::uint32_t crm,std::uint32_t op2,std::uint32_t v) override{runtime_coproc_write(std::uint8_t(cp),std::uint8_t(op1),std::uint8_t(crn),std::uint8_t(crm),std::uint8_t(op2),v);}
+ std::uint32_t coproc_read(std::uint32_t cp,std::uint32_t op1,std::uint32_t crn,std::uint32_t crm,std::uint32_t op2) override{return runtime_coproc_read(std::uint8_t(cp),std::uint8_t(op1),std::uint8_t(crn),std::uint8_t(crm),std::uint8_t(op2));}
+ void coproc_cdp(std::uint32_t cp,std::uint32_t op1,std::uint32_t crn,std::uint32_t crm,std::uint32_t op2) override{runtime_coproc_cdp(std::uint8_t(cp),std::uint8_t(op1),std::uint8_t(crn),std::uint8_t(crm),std::uint8_t(op2),instruction);}
+};
+armv4t::CPUState cpu{}; CtrBus bus; bool initialized=false;
+void import_state(){std::copy(std::begin(g_cpu.R),std::end(g_cpu.R),std::begin(cpu.R));const auto c=g_cpu.cpsr;cpu.cpsr.n=c&CPSR_N_BIT;cpu.cpsr.z=c&CPSR_Z_BIT;cpu.cpsr.c=c&CPSR_C_BIT;cpu.cpsr.v=c&CPSR_V_BIT;cpu.cpsr.q=c&CPSR_Q_BIT;cpu.cpsr.i=c&CPSR_I_BIT;cpu.cpsr.f=c&CPSR_F_BIT;cpu.cpsr.t=c&CPSR_T_BIT;cpu.cpsr.mode=std::uint8_t(c&0x1fu);cpu.thumb=cpu.cpsr.t;}
+void export_state(){std::copy(std::begin(cpu.R),std::end(cpu.R),std::begin(g_cpu.R));g_cpu.cpsr=(cpu.cpsr.n?CPSR_N_BIT:0u)|(cpu.cpsr.z?CPSR_Z_BIT:0u)|(cpu.cpsr.c?CPSR_C_BIT:0u)|(cpu.cpsr.v?CPSR_V_BIT:0u)|(cpu.cpsr.q?CPSR_Q_BIT:0u)|(cpu.cpsr.i?CPSR_I_BIT:0u)|(cpu.cpsr.f?CPSR_F_BIT:0u)|(cpu.cpsr.t?CPSR_T_BIT:0u)|cpu.cpsr.mode;}
+bool execute_extension(const mk7::armv6k::Instruction& e){using mk7::armv6k::Op;const auto rotate=unsigned((e.raw>>10)&3u)*8u;switch(e.op){case Op::Base:return false;case Op::Rev:cpu.R[e.rd]=runtime_rev(cpu.R[e.rm]);break;case Op::Rev16:cpu.R[e.rd]=runtime_rev16(cpu.R[e.rm]);break;case Op::Revsh:cpu.R[e.rd]=runtime_revsh(cpu.R[e.rm]);break;case Op::Ldrex:cpu.R[e.rd]=runtime_ldrex(cpu.R[e.rn]);break;case Op::Strex:cpu.R[e.rd]=runtime_strex(cpu.R[e.rn],cpu.R[e.rm]);break;case Op::Ldrexh:cpu.R[e.rd]=runtime_ldrexh(cpu.R[e.rn]);break;case Op::Strexh:cpu.R[e.rd]=runtime_strexh(cpu.R[e.rn],cpu.R[e.rm]);break;case Op::Ldrexd:runtime_ldrexd(cpu.R[e.rn],cpu.R[e.rd],cpu.R[(e.rd+1u)&15u]);break;case Op::Strexd:cpu.R[e.rd]=runtime_strexd(cpu.R[e.rn],cpu.R[e.rm],cpu.R[(e.rm+1u)&15u]);break;case Op::Uxtb:cpu.R[e.rd]=runtime_uxtb(cpu.R[e.rm],rotate);break;case Op::Uxth:cpu.R[e.rd]=runtime_uxth(cpu.R[e.rm],rotate);break;case Op::Sxtb:cpu.R[e.rd]=runtime_sxtb(cpu.R[e.rm],rotate);break;case Op::Sxth:cpu.R[e.rd]=runtime_sxth(cpu.R[e.rm],rotate);break;case Op::Uxtah:cpu.R[e.rd]=runtime_uxtah(cpu.R[e.rn],cpu.R[e.rm],rotate);break;case Op::Sxtah:cpu.R[e.rd]=runtime_sxtah(cpu.R[e.rn],cpu.R[e.rm],rotate);break;case Op::Uxtab:cpu.R[e.rd]=runtime_uxtab(cpu.R[e.rn],cpu.R[e.rm],rotate);break;case Op::Pkhbt:cpu.R[e.rd]=runtime_pkhbt(cpu.R[e.rn],cpu.R[e.rm],unsigned((e.raw>>7)&31u));break;case Op::Usat:export_state();cpu.R[e.rd]=runtime_usat(cpu.R[e.rm],unsigned((e.raw>>16)&31u),unsigned((e.raw>>7)&31u),(e.raw&0x40u)!=0);import_state();break;case Op::Cps:export_state();runtime_cps(e.enable,e.raw&0xc0u);import_state();break;case Op::Setend:export_state();runtime_setend(e.big_endian);import_state();break;case Op::VfpLoadStore:export_state();runtime_vfp_load_store(e.raw);import_state();break;case Op::Udf:export_state();runtime_udf(e.raw,e.pc);return true;}cpu.R[15]+=4u;++g_insn_count[0];return true;}
+}
+void ctr_compact_reset() noexcept{cpu={};initialized=false;}
+bool ctr_compact_run_slice(std::uint32_t budget) noexcept{if(!initialized){import_state();initialized=true;}for(std::uint32_t n=0;n<budget&&!runtime_unwinding();++n){const auto pc=cpu.R[15];const auto raw=cpu.thumb?std::uint32_t(bus.read16(pc)):bus.read32(pc);bus.instruction=raw;if(!cpu.thumb&&execute_extension(mk7::armv6k::decode(raw,pc)))continue;armv4t::Instr ins;if(cpu.thumb)ins=armv4t::ThumbDecoder::decode(std::uint16_t(raw),pc);else ins=armv4t::ArmDecoder::decode(raw,pc);std::uint32_t cycles{};const auto result=armv4t::Interpreter::step(cpu,bus,ins,&cycles);++g_insn_count[0];runtime_tick(cycles);if(result==armv4t::Interpreter::Result::Swi){cpu.R[15]+=cpu.thumb?2u:4u;export_state();runtime_swi(ins.swi_imm);import_state();}else if(result==armv4t::Interpreter::Result::Undefined||result==armv4t::Interpreter::Result::NotImplemented){export_state();runtime_unimplemented_op(pc,cpu.thumb?bus.read16(pc):bus.read32(pc));return false;}}export_state();return !runtime_unwinding();}
