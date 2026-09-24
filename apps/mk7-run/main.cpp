@@ -33,7 +33,7 @@ namespace {
 constexpr std::string_view expected_sha512 =
     "8b10af4bf0347d4ed6076d4b29f36e6d2ab76f6ef60459958ac72842b7345877"
     "fb4721992c04664149edce7c294715803d4261b93a9553ef6e85616b71ce0225";
-constexpr std::size_t ctr_user_address_space_size = 0x10000000u;
+constexpr std::size_t ctr_user_address_space_size = 0x18000000u;
 constexpr std::uint32_t ctr_main_stack_top = 0x10000000u;
 constexpr std::uint32_t text_address = 0x00100000u;
 constexpr std::size_t expected_code_size = 0x00577000u;
@@ -127,8 +127,8 @@ auto run_ctrtool(const Options& options, const std::filesystem::path& output) ->
         return L"\"" + value + L"\"";
     };
     auto command = quote(executable) + L" --quiet --decompresscode --exefsdir=" +
-                   quote(output.wstring()) + L" --romfsdir=" +
-                   quote((output / "romfs").wstring()) + L" " + quote(options.cia.wstring());
+                   quote(output.wstring()) + L" --romfs=" +
+                   quote((output / "romfs.bin").wstring()) + L" " + quote(options.cia.wstring());
     std::vector<wchar_t> command_buffer(command.begin(), command.end());
     command_buffer.push_back(L'\0');
 
@@ -187,9 +187,9 @@ auto main(int argc, char** argv) -> int {
         std::vector<std::byte> memory(ctr_user_address_space_size);
         std::copy(code.begin(), code.end(), memory.begin() + text_address);
         ctr_runtime_initialize(memory);
-        ctr_runtime_set_romfs_root((extraction.path() / "romfs").string());
+        ctr_runtime_set_romfs_root((extraction.path() / "romfs.bin").string());
         g_cpu.R[13] = ctr_main_stack_top;
-        std::cout << "[memory] initialized 256 MiB CTR user map; SP=0x10000000\n";
+        std::cout << "[memory] initialized 384 MiB CTR user map; SP=0x10000000\n";
 
 #ifdef MK7_COMPACT_EXECUTION
         ctr_compact_reset();
