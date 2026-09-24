@@ -211,7 +211,15 @@ auto main(int argc, char** argv) -> int {
                       << ", unwinding=" << progress.unwinding
                       << ", command-lists=" << gpu.command_lists
                       << ", draws=" << gpu.draw_calls
-                      << ", rendered=" << gpu.draws_rendered << '\n';
+                      << ", rendered=" << gpu.draws_rendered
+                      << ", r0=0x" << std::hex << g_cpu.R[0]
+                      << ", r1=0x" << g_cpu.R[1]
+                      << ", r4=0x" << g_cpu.R[4]
+                      << ", r5=0x" << g_cpu.R[5]
+                      << ", r6=0x" << g_cpu.R[6]
+                      << ", r7=0x" << g_cpu.R[7]
+                      << ", sp=0x" << g_cpu.R[13]
+                      << ", lr=0x" << g_cpu.R[14] << std::dec << '\n';
             return progress.unwinding ? 2 : 0;
         }
 
@@ -238,7 +246,15 @@ auto main(int argc, char** argv) -> int {
                               << ", instructions=" << progress.instructions
                               << ", command-lists=" << gpu.command_lists
                               << ", draws=" << gpu.draw_calls
-                              << ", rendered=" << gpu.draws_rendered << '\n';
+                              << ", rendered=" << gpu.draws_rendered
+                      << ", r0=0x" << std::hex << g_cpu.R[0]
+                      << ", r1=0x" << g_cpu.R[1]
+                      << ", r4=0x" << g_cpu.R[4]
+                      << ", r5=0x" << g_cpu.R[5]
+                      << ", r6=0x" << g_cpu.R[6]
+                      << ", r7=0x" << g_cpu.R[7]
+                      << ", sp=0x" << g_cpu.R[13]
+                      << ", lr=0x" << g_cpu.R[14] << std::dec << '\n';
                 }
             }
             host.render(ctr_runtime_snapshot());
