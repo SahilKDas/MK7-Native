@@ -9,10 +9,7 @@ state rather than silently treating a draw as complete.
 
 ## Current implementation boundary
 
-At the time of writing, `src/recomp/pica200.cpp` parses command-list parameter
-and header pairs, byte-masked register writes, repeated/consecutive writes,
-and the two draw-trigger register IDs. It counts draws but does not fetch
-vertices or shade/rasterize them. It also performs a memory fill and converts
+`src/recomp/pica200.cpp` parses command lists and handles a restricted draw-arrays case with one float4 position stream, the supported shader subset, plain triangles, and a linear RGBA8 target. Other draw configurations are counted as unsupported. It also performs a memory fill and converts
 several guest framebuffer pixel formats to host RGBA. GSP handles a subset of
 shared GX queue commands in `src/recomp/ctr_services.inc`. The Vulkan host in
 `src/host/application.cpp` uploads those CPU-produced pixels into a swapchain
@@ -35,8 +32,7 @@ supported shader-instruction subset and feeds selected output registers to
 that rasterizer. This bridge is for synthetic inputs; it does not decode guest
 vertex buffers or PICA output-map registers.
 
-These are not a complete PICA200 path. In particular, draw-trigger writes
-still increment a counter without producing pixels. The CPU reference does not
+This is not a complete PICA200 path. The CPU reference does not
 yet cover clipping, culling, scissor, alpha test, tiled texture formats,
 combiners, framebuffer format writes, logic operations, lighting/fog, geometry
 shaders, or the full shader ISA. It is not a Vulkan guest-triangle renderer.
