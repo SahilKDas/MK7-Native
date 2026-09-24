@@ -1,4 +1,5 @@
 #include <mk7/recomp/runtime.hpp>
+#include <mk7/recomp/pica200.hpp>
 #include <mk7/host/application.hpp>
 
 #include <array>
@@ -37,6 +38,7 @@ constexpr std::size_t expected_code_size = 0x00577000u;
 struct Options {
     std::filesystem::path cia;
     std::filesystem::path ctrtool = "ctrtool";
+    std::uint64_t headless_slices{};
 };
 
 class TempDirectory {
@@ -64,6 +66,9 @@ private:
     for (auto index = 2; index < argc; ++index) {
         if (std::string_view{argv[index]} == "--ctrtool" && index + 1 < argc) {
             options.ctrtool = argv[++index];
+        } else if (std::string_view{argv[index]} == "--headless-slices" && index + 1 < argc) {
+            options.headless_slices = std::stoull(argv[++index]);
+            if (!options.headless_slices) throw std::runtime_error{"headless slice count must be positive"};
         } else {
             throw std::runtime_error{"unknown argument: " + std::string{argv[index]}};
         }
@@ -157,7 +162,7 @@ auto main(int argc, char** argv) -> int {
     try {
         const auto options = options_from(argc, argv);
         mk7::host::Application host;
-        host.initialize("MK7-Native - CTR bring-up");
+        if (!options.headless_slices) host.initialize("MK7-Native - CTR bring-up");
         std::cout << "[verify] SHA-512...\n";
         const auto digest = sha512(options.cia);
         if (digest != expected_sha512) {
@@ -192,7 +197,26 @@ auto main(int argc, char** argv) -> int {
         } else {
             std::cout << "[boot] no SVC reached; PC=0x" << std::hex << startup.pc << std::dec << '\n';
         }
+        if (options.headless_slices) {
+            for (std::uint64_t slice = 0; slice < options.headless_slices && !runtime_unwinding(); ++slice) {
+                ctr_runtime_resume();
+            }
+            const auto progress = ctr_runtime_snapshot();
+            const auto gpu = pica200_snapshot();
+            std::cout << "[headless] slices=" << options.headless_slices
+                      << ", PC=0x" << std::hex << progress.pc
+                      << ", dispatch=0x" << progress.last_dispatch
+                      << ", SVC=0x" << progress.last_svc << std::dec
+                      << ", instructions=" << progress.instructions
+                      << ", unwinding=" << progress.unwinding
+                      << ", command-lists=" << gpu.command_lists
+                      << ", draws=" << gpu.draw_calls
+                      << ", rendered=" << gpu.draws_rendered << '\n';
+            return progress.unwinding ? 2 : 0;
+        }
+
         bool first_resume = true;
+        std::uint64_t slices = 0;
         while (host.poll()) {
             if (!runtime_unwinding()) {
                 if (first_resume) std::cout << "[boot] resuming generated code at PC=0x" << std::hex << g_cpu.R[15] << std::dec << '\n';
@@ -205,13 +229,24 @@ auto main(int argc, char** argv) -> int {
                               << ", unwinding=" << resumed.unwinding << '\n';
                     first_resume = false;
                 }
+                ++slices;
+                if (slices % 60u == 0) {
+                    const auto progress = ctr_runtime_snapshot();
+                    const auto gpu = pica200_snapshot();
+                    std::cout << "[progress] slices=" << slices << ", PC=0x" << std::hex << progress.pc
+                              << ", SVC=0x" << progress.last_svc << std::dec
+                              << ", instructions=" << progress.instructions
+                              << ", command-lists=" << gpu.command_lists
+                              << ", draws=" << gpu.draw_calls
+                              << ", rendered=" << gpu.draws_rendered << '\n';
+                }
             }
             host.render(ctr_runtime_snapshot());
         }
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "mk7-run: " << error.what() << '\n'
-                  << "usage: mk7-run <game.cia> [--ctrtool path/to/ctrtool]\n";
+                  << "usage: mk7-run <game.cia> [--ctrtool path/to/ctrtool] [--headless-slices N]\n";
         return 1;
     }
 }
