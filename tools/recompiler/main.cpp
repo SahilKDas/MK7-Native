@@ -34,6 +34,7 @@ struct Options {
     std::filesystem::path input;
     std::filesystem::path output;
     std::filesystem::path symbols;
+    std::vector<std::uint32_t> seeds;
     std::filesystem::path map_output;
     std::uint32_t image_base = 0x00100000;
     std::uint32_t entry = 0x00100000;
@@ -71,6 +72,7 @@ struct Options {
         if (argument == "--input") result.input = next();
         else if (argument == "--output") result.output = next();
         else if (argument == "--symbols") result.symbols = next();
+        else if (argument == "--seed") result.seeds.push_back(number(next()));
         else if (argument == "--map-output") result.map_output = next();
         else if (argument == "--image-base") result.image_base = number(next());
         else if (argument == "--entry") result.entry = number(next());
@@ -200,12 +202,15 @@ struct PendingFunction {
         64, (bytes.size() * options.coverage_permille + 999) / 1000);
     std::deque<PendingFunction> pending{{options.entry, false}};
     std::set<std::uint64_t> queued{std::uint64_t(options.entry) << 1};
+    for (const auto seed : options.seeds) {
+        if (in_executable(bytes, options, seed) && queued.insert(std::uint64_t(seed) << 1).second) pending.push_back({seed, false});
+    }
     std::set<std::uint32_t> claimed;
     std::vector<Function> functions;
     std::size_t covered_bytes{};
     std::uint32_t scan_cursor = options.image_base;
 
-    while (covered_bytes < target_bytes) {
+    while (covered_bytes < target_bytes || !pending.empty()) {
         if (pending.empty()) {
             bool found{};
             while (in_executable(bytes, options, scan_cursor)) {
@@ -277,11 +282,15 @@ struct PendingFunction {
                     continue;
                 }
 
-                if (instruction.is_return || (instruction.is_branch && instruction.is_indirect)) break;
+                if (instruction.is_return) break;
+                if (instruction.is_branch && instruction.is_indirect) {
+                    if ((raw & 0x0ffffff0u) == 0x01a0f000u) blocks.push_back(pc + 4u);
+                    break;
+                }
                 if (instruction.is_branch) {
                     const auto target = instruction.branch_target & ~1u;
                     if (instruction.cond == armv4t::Cond::AL) {
-                        if (target >= request.address && target <= pc) {
+                        if (target >= request.address && target <= pc + 0x1000u) {
                             blocks.push_back(target);
                         } else {
                             callees.push_back({target, (instruction.branch_target & 1u) != 0});

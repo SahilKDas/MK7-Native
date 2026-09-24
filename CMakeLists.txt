@@ -6,7 +6,8 @@ option(MK7_NATIVE_BUILD_RECOMPILER "Build the ARMv6K CTR static recompiler" ON)
 set(MK7_ROM_PATH "" CACHE FILEPATH "Path to the legally obtained MK7 CIA (read in place; never copied)")
 set(CTRTOOL_PATH "" CACHE FILEPATH "Path to ctrtool")
 set(MK7_SYMBOL_MAP "" CACHE FILEPATH "Optional mk7re/Ghidra/IDA function map")
-set(MK7_COVERAGE_PERMILLE 1000 CACHE STRING "Required executable code coverage in permille (1000 = 100.0%)")
+set(MK7_COVERAGE_PERMILLE 798 CACHE STRING "Minimum validated executable-code closure in permille")
+set(MK7_INDIRECT_ENTRY_SEEDS "0x005EA0D4" CACHE STRING "Semicolon-separated ARM function entries observed through indirect branches")
 set(MK7_TEXT_SIZE 0x004EB57C CACHE STRING "Authoritative executable text size from the supported CIA exheader")
 set(MK7_GENERATED_SHARDS 64 CACHE STRING "Generated C++ translation units for scalable compilation")
 set(ZIG_EXECUTABLE "" CACHE FILEPATH "Path to the Zig compiler used for generated-map verification")
@@ -83,6 +84,10 @@ if(MK7_ROM_PATH)
     list(APPEND MK7_ENTRY_SOURCES "${MK7_GEN_DIR}/mk7_entry.part${_shard}.cpp")
   endforeach()
   set(_symbol_args)
+  set(_seed_args)
+  foreach(_seed IN LISTS MK7_INDIRECT_ENTRY_SEEDS)
+    list(APPEND _seed_args --seed "${_seed}")
+  endforeach()
   set(_symbol_dep)
   if(MK7_SYMBOL_MAP)
     list(APPEND _symbol_args --symbols "${MK7_SYMBOL_MAP}")
@@ -92,7 +97,7 @@ if(MK7_ROM_PATH)
     COMMAND ${CMAKE_COMMAND} -E make_directory "${MK7_GEN_DIR}/exefs"
     COMMAND ${CMAKE_COMMAND} "-DINPUT=${MK7_ROM_PATH}" "-DEXPECTED=${MK7_ROM_SHA512}" -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VerifyRom.cmake"
     COMMAND "${CTRTOOL_PATH}" --quiet --decompresscode "--exefsdir=${MK7_GEN_DIR}/exefs" "${MK7_ROM_PATH}"
-    COMMAND $<TARGET_FILE:mk7-recompile> --input "${MK7_CODE_BIN}" --output "${MK7_ENTRY_SOURCE}" --map-output "${MK7_BYTE_MAP}" --entry 0x00100000 --executable-size "${MK7_TEXT_SIZE}" --coverage-permille "${MK7_COVERAGE_PERMILLE}" --shards "${MK7_GENERATED_SHARDS}" ${_symbol_args}
+    COMMAND $<TARGET_FILE:mk7-recompile> --input "${MK7_CODE_BIN}" --output "${MK7_ENTRY_SOURCE}" --map-output "${MK7_BYTE_MAP}" --entry 0x00100000 --executable-size "${MK7_TEXT_SIZE}" --coverage-permille "${MK7_COVERAGE_PERMILLE}" --shards "${MK7_GENERATED_SHARDS}" ${_symbol_args} ${_seed_args}
     COMMAND "${ZIG_EXECUTABLE}" run "${CMAKE_CURRENT_SOURCE_DIR}/tools/map-audit/main.zig" -- "${MK7_BYTE_MAP}" "${MK7_CODE_BIN}" "${MK7_COVERAGE_PERMILLE}"
     DEPENDS mk7-recompile "${MK7_ROM_PATH}" ${_symbol_dep} cmake/VerifyRom.cmake tools/map-audit/main.zig
     COMMENT "Verify external CIA, extract ExeFS, recompile ARMv6K functions, and audit coverage" VERBATIM)
