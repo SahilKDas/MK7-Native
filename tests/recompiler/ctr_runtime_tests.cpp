@@ -13,7 +13,7 @@ int main(){
  bus_write_u32(0x100,0xfeedface);assert(runtime_ldrex(0x100)==0xfeedface);assert(runtime_strex(0x100,0x11223344)==0);assert(bus_read_u32(0x100)==0x11223344);assert(runtime_strex(0x100,0)==1);
  bus_write_u16(0x120,0xabcd);assert(runtime_ldrexh(0x120)==0xabcd);assert(runtime_strexh(0x120,0x12345)==0);assert(bus_read_u16(0x120)==0x2345);assert(runtime_strexh(0x120,0)==1);
  runtime_write_user_reg(7,0x76543210);assert(runtime_read_user_reg(7)==0x76543210);
- g_cpu.R[0]=0x1000;g_cpu.R[1]=0;g_cpu.R[2]=0x1000;g_cpu.R[3]=3;runtime_swi(0x1);assert(g_cpu.R[0]==0&&g_cpu.R[1]==0x1000);
+ g_cpu.R[0]=3;g_cpu.R[1]=0x1000;g_cpu.R[2]=0;g_cpu.R[3]=0x1000;runtime_swi(0x1);assert(g_cpu.R[0]==0&&g_cpu.R[1]==0x1000);
  g_cpu.R[0]=0xffffffffu;g_cpu.R[1]=0;runtime_swi(0x21);assert(g_cpu.R[0]==0&&g_cpu.R[1]>=0x100u);
  g_cpu.R[0]=g_cpu.R[1];runtime_swi(0x22);assert(g_cpu.R[0]==0);runtime_swi(0x35);assert(g_cpu.R[0]==0&&g_cpu.R[1]==1);
 bus_write_u32(0x210,0x3a727265u);bus_write_u8(0x214,'f');bus_write_u8(0x215,0);g_cpu.R[1]=0x210;runtime_swi(0x2d);assert(g_cpu.R[0]==0&&g_cpu.R[1]>=0x100u);g_cpu.R[0]=g_cpu.R[1];runtime_swi(0x23);assert(g_cpu.R[0]==0);
