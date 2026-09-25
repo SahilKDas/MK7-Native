@@ -12,6 +12,14 @@ void dispatch_cfg(std::uint32_t b,std::uint16_t c){
  if(c==0x0002){write(b,(std::uint32_t(c)<<16)|0x80u);write(b+4,0u);write(b+8,1u);return;}
  if(c==0x0003){const std::uint64_t hash=0x4d4b374e41544956ull^read<std::uint32_t>(b+4);write(b,(std::uint32_t(c)<<16)|0xc0u);write(b+4,0u);write(b+8,std::uint32_t(hash));write(b+12,std::uint32_t(hash>>32));return;}
  ipc_result(b,c,0xd900182fu);
+}void dispatch_frd(std::uint32_t b,std::uint16_t c){
+ auto zero_words=[&](std::uint32_t words){write(b,(std::uint32_t(c)<<16)|(words<<6));for(std::uint32_t i=1;i<=words;++i)write(b+i*4u,0u);};
+ if(c==0x0032){ipc_result(b,c,0);return;}
+ if(c==0x0008){const auto descriptor=read<std::uint32_t>(cp15.tls+0x180u),destination=read<std::uint32_t>(cp15.tls+0x184u),size=(descriptor>>14)&0x3ffffu;if(std::uint64_t(destination)+size<=mem.size())std::fill(mem.begin()+destination,mem.begin()+destination+size,std::byte{});ipc_result(b,c,0);return;}
+ if(c==0x0005){zero_words(5);return;}if(c==0x0007){zero_words(3);return;}if(c==0x0009){zero_words(7);return;}if(c==0x000a){zero_words(25);return;}
+ if(c==0x0011){zero_words(2);return;}
+ if(c==0x0012||c==0x0013||c==0x0014||c==0x0015||c==0x0017){ipc_result(b,c,0);return;}
+ ipc_result(b,c,0xd900182fu);
 }void dispatch_boss(std::uint32_t b,std::uint16_t c){if(c==0x0001){ipc_result(b,c,0);return;}std::cerr<<"[ctr] unimplemented boss:U command 0x"<<std::hex<<c<<std::dec<<'\n';ipc_result(b,c,0xd900182fu);}
 void dispatch_dsp(std::uint32_t b,std::uint16_t c){
  if(c==0x0011){shared_handle(services.dsp_shared,"dsp dram",mem.size()>0x0fe80000u?0x0fe00000u:0x2000u,0x80000u);services.dsp_loaded=true;services.dsp_pipe_offset=0;write(b,(std::uint32_t(c)<<16)|0x80u);write(b+4,0u);write(b+8,1u);return;}
