@@ -353,6 +353,8 @@ auto main(int argc, char** argv) -> int {
                       << ", instructions=" << progress.instructions
                       << ", unwinding=" << progress.unwinding
                       << ", command-lists=" << gpu.command_lists
+                      << ", register-writes=" << gpu.register_writes
+                      << ", last-reg=0x" << std::hex << gpu.last_register << std::dec
                       << ", draws=" << gpu.draw_calls
                       << ", rendered=" << gpu.draws_rendered
                       << ", r0=0x" << std::hex << g_cpu.R[0]
@@ -367,6 +369,7 @@ auto main(int argc, char** argv) -> int {
                       << ", s0=0x" << runtime_vfp_word(0)
                       << ", s1=0x" << runtime_vfp_word(1)
                       << ", s2=0x" << runtime_vfp_word(2) << std::dec << '\n';
+            ctr_runtime_dump_waits();
             return progress.unwinding ? 2 : 0;
         }
 
@@ -396,7 +399,9 @@ auto main(int argc, char** argv) -> int {
                               << ", SVC=0x" << progress.last_svc << std::dec
                               << ", instructions=" << progress.instructions
                               << ", command-lists=" << gpu.command_lists
-                              << ", draws=" << gpu.draw_calls
+                              << ", register-writes=" << gpu.register_writes
+                      << ", last-reg=0x" << std::hex << gpu.last_register << std::dec
+                      << ", draws=" << gpu.draw_calls
                               << ", rendered=" << gpu.draws_rendered
                       << ", r0=0x" << std::hex << g_cpu.R[0]
                       << ", r1=0x" << g_cpu.R[1]

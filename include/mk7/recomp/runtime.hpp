@@ -14,7 +14,7 @@ extern ArmCpuState g_cpu; extern std::array<std::uint64_t,2> g_insn_count; exter
 extern "C" const CtrGeneratedFunction mk7_generated_functions[]; extern "C" const std::size_t mk7_generated_function_count;
 void ctr_runtime_initialize(std::span<std::byte>); void ctr_runtime_set_romfs_root(std::string); void ctr_runtime_set_shared_data_romfs(std::string); void ctr_runtime_reset(); bool ctr_runtime_resume() noexcept; void ctr_runtime_scheduler_initialize() noexcept; bool ctr_runtime_scheduler_rotate() noexcept; bool ctr_runtime_scheduler_current_runnable() noexcept; bool ctr_runtime_reschedule_requested() noexcept;
 void ctr_runtime_enable_mii_bridge_hle(bool) noexcept; bool ctr_runtime_try_hle(std::uint32_t,std::uint32_t*) noexcept;
-std::uint32_t ctr_runtime_last_svc() noexcept; std::uint32_t ctr_runtime_last_dispatch() noexcept; RuntimeSnapshot ctr_runtime_snapshot() noexcept; void ctr_runtime_set_input(std::uint32_t,float,float) noexcept;
+void ctr_runtime_dump_waits() noexcept; std::uint32_t ctr_runtime_last_svc() noexcept; std::uint32_t ctr_runtime_last_dispatch() noexcept; RuntimeSnapshot ctr_runtime_snapshot() noexcept; void ctr_runtime_set_input(std::uint32_t,float,float) noexcept;
 bool runtime_should_yield() noexcept; bool runtime_unwinding() noexcept; void runtime_insn_slow() noexcept; void runtime_tick(std::uint32_t) noexcept;
 void runtime_call_push_return(std::uint32_t) noexcept; void runtime_call_cancel_return(std::uint32_t) noexcept; bool runtime_call_should_return(std::uint32_t) noexcept;
 void runtime_link_call(CtrLinkSlot*) noexcept; void runtime_link_branch(CtrLinkSlot*) noexcept; void runtime_dispatch(std::uint32_t) noexcept; void runtime_dispatch_with_exchange(std::uint32_t) noexcept;
