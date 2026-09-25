@@ -8,6 +8,7 @@ extern "C" const CtrGeneratedFunction mk7_generated_functions[] = {};
 extern "C" const std::size_t mk7_generated_function_count = 0;
 int main(){
  std::vector<std::byte> memory(0x4000);ctr_runtime_initialize(memory);
+ std::array<std::uint32_t,16> hle_regs{};hle_regs[14]=0x1235;assert(!ctr_runtime_try_hle(0x0013039c,hle_regs.data()));ctr_runtime_enable_mii_bridge_hle(true);assert(!ctr_runtime_try_hle(0x00130398,hle_regs.data()));assert(ctr_runtime_try_hle(0x00130bd4,hle_regs.data()));assert(hle_regs[0]==0&&hle_regs[15]==0x1234);ctr_runtime_enable_mii_bridge_hle(false);
  assert(bus_read_u8(0x1ff80014u)==1u);assert(bus_read_u32(0x1ff80040u)==0x04000000u);
  runtime_coproc_write(15,0,13,0,3,0x12345678);assert(runtime_coproc_read(15,0,13,0,3)==0x12345678);
  bus_write_u32(0x100,0xfeedface);assert(runtime_ldrex(0x100)==0xfeedface);assert(runtime_strex(0x100,0x11223344)==0);assert(bus_read_u32(0x100)==0x11223344);assert(runtime_strex(0x100,0)==1);

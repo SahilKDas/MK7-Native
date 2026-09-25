@@ -101,7 +101,7 @@ Alternatively, point directly at the dumped system-title CIA; its SHA-512 is rep
 
     build/native/mk7-run.exe "C:/path/to/MARIO KART 7.cia" --ctrtool "C:/path/to/ctrtool.exe" --shared-data-cia "C:/path/to/0004009B00010202.cia"
 
-When the nested GPL companion has been built, `mk7-run` automatically negotiates protocol 1, creates `%APPDATA%/MK7-Native/player.mii.json`, renders an original avatar preview, and generates a disposable neutral RomFS. Override discovery with `--mii-bridge` and the profile with `--mii-profile`. The programs remain separate processes and share no linked code.
+When the nested GPL companion has been built, `mk7-run` automatically negotiates protocol 1, creates `%APPDATA%/MK7-Native/player.mii.json`, renders an original avatar preview, and generates a disposable neutral RomFS. Override discovery with `--mii-bridge` and the profile with `--mii-profile`. The programs remain separate processes and share no linked code. Bridge mode enables a USA Rev2-only HLE boundary for the two identified CFL resource-loader/size-validation entry points; a real shared-data dump never enables those hooks. This removes that system-resource requirement only—it does not make the rest of MK7 playable or claim complete CFL rendering.
 
 The runner reads both images in place and retains no extracted game cache after exit.
 

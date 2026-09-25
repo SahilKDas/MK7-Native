@@ -304,6 +304,7 @@ auto main(int argc, char** argv) -> int {
             mk7::mii::BridgeAdapter bridge{bridge_executable, profile};
             const auto artifacts = bridge.prepare(extraction.path() / "mii-bridge");
             shared_data_romfs = artifacts.romfs;
+            ctr_runtime_enable_mii_bridge_hle(true);
             std::cout << "[mii] GPL bridge protocol 1 active; profile=" << artifacts.profile << '\n';
         }
         if (!shared_data_romfs.empty()) {
