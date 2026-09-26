@@ -46,6 +46,7 @@ struct Options {
     std::filesystem::path shared_data_cia;
     std::filesystem::path mii_bridge;
     std::filesystem::path mii_profile;
+    std::filesystem::path save_root;
     std::uint64_t headless_slices{};
 };
 
@@ -124,6 +125,8 @@ private:
             options.mii_bridge = argv[++index];
         } else if (std::string_view{argv[index]} == "--mii-profile" && index + 1 < argc) {
             options.mii_profile = argv[++index];
+        } else if (std::string_view{argv[index]} == "--save-dir" && index + 1 < argc) {
+            options.save_root = argv[++index];
         } else if (std::string_view{argv[index]} == "--headless-slices" && index + 1 < argc) {
             options.headless_slices = std::stoull(argv[++index]);
             if (!options.headless_slices) throw std::runtime_error{"headless slice count must be positive"};
@@ -279,6 +282,13 @@ auto main(int argc, char** argv) -> int {
         std::copy(code.begin(), code.end(), memory.begin() + text_address);
         ctr_runtime_initialize(memory);
         ctr_runtime_set_romfs_root((extraction.path() / "romfs.bin").string());
+        auto save_root = options.save_root;
+        if (save_root.empty()) {
+            const auto appdata = std::getenv("APPDATA");
+            save_root = (appdata ? std::filesystem::path{appdata} : std::filesystem::current_path()) / "MK7-Native/save/0004000000030800";
+        }
+        ctr_runtime_set_save_root(save_root.string());
+        std::cout << "[save] persistent archive root=" << save_root << '\n';
         auto shared_data_romfs = options.shared_data_romfs;
         auto bridge_executable = options.mii_bridge;
         if (bridge_executable.empty()) {
@@ -425,8 +435,7 @@ auto main(int argc, char** argv) -> int {
                   << "usage: mk7-run <game.cia> [--ctrtool path/to/ctrtool] "
                      "[--shared-data-romfs path/to/0004009B00010202.app.romfs | "
                      "--shared-data-cia path/to/0004009B00010202.cia] [--mii-bridge path/to/mk7-mii-bridge.exe] "
-                     "[--mii-profile path/to/player.mii.json] [--headless-slices N]\n";
+                     "[--mii-profile path/to/player.mii.json] [--save-dir path] [--headless-slices N]\n";
         return 1;
     }
 }
-
