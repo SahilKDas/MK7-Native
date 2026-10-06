@@ -57,7 +57,7 @@ int main(){
  assert(pica200_run_vertex_shader(std::span<const PicaVec4>(&vertex,1),shaded));
  assert(shaded.registers[0][0]==vertex[1]&&shaded.registers[0][1]==0.f);
  const auto uniform_cursor=cursor;
- const std::uint32_t packed_f24[3]{0x00410000u,0x00004080u,0x3f000040u};
+ const std::uint32_t packed_f24[3]{0x00410000u,0x80004000u,0x3f000040u};
  gpu_write(cursor,0x2c0,0);
  for(const auto word:packed_f24)gpu_write(cursor,0x2c1,word);
  gpu_write(cursor,0x2cb,0);
