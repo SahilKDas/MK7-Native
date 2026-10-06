@@ -11,8 +11,9 @@ std::span<std::byte> memory;
 constexpr std::uint32_t vram_base=0x1f000000u,vram_size=0x00600000u;
 std::array<std::byte,vram_size> vram{};
 std::array<std::uint32_t,0x300> registers{};
-struct Framebuffer {std::uint32_t address{},stride{},format{};bool valid{};};
+struct Framebuffer {std::uint32_t address{},stride{},format{},width{},height{};bool rotate{},valid{};};
 std::array<Framebuffer,2> framebuffers{};
+Framebuffer render_target{};
 Pica200Snapshot stats;
 std::array<std::uint32_t,4096> shader_code{},shader_descriptors{};
 std::array<PicaVec4,96> uniforms{};
@@ -20,6 +21,7 @@ std::uint32_t code_index{},descriptor_index{},uniform_index{},uniform_word_count
 std::array<std::uint32_t,4> uniform_words{};
 bool uniform_float32{};
 unsigned command_depth{};
+std::uint64_t last_presented_generation{};
 float decode_f24(std::uint32_t value){const std::uint32_t sign=(value&0x800000u)<<8,exponent=(value>>16)&0x7fu,mantissa=value&0xffffu;if(exponent==0)return std::bit_cast<float>(sign|mantissa);if(exponent==0x7f)return std::bit_cast<float>(sign|0x7f800000u|(mantissa<<7));return std::bit_cast<float>(sign|((exponent+64u)<<23)|(mantissa<<7));}
 std::span<std::byte> map_memory(std::uint32_t address,std::size_t size){
  if(std::uint64_t(address)+size<=memory.size())return memory.subspan(address,size);
@@ -32,7 +34,7 @@ std::uint32_t gpu_to_virtual(std::uint32_t address){
  return address;
 }
 template<class T> bool load(std::uint32_t address,T& value){const auto mapped=map_memory(address,sizeof(T));if(mapped.empty())return false;std::memcpy(&value,mapped.data(),sizeof(T));return true;}
-bool execute_draw_arrays() noexcept;
+bool execute_draw(bool indexed) noexcept;
 bool decode_command_list(std::uint32_t address,std::uint32_t size,unsigned depth) noexcept;
 void write_register(std::uint32_t id,std::uint32_t value,std::uint32_t mask){
  if(id>=registers.size())return;
@@ -45,7 +47,7 @@ else if(id>=0x2d6&&id<=0x2dd){shader_descriptors[descriptor_index++&4095u]=curre
 else if(id==0x2c0){uniform_index=current&0x7fu;uniform_float32=(current>>31)!=0;uniform_word_count=0;}
 else if(id>=0x2c1&&id<=0x2c8){uniform_words[uniform_word_count++&3u]=current;const auto needed=uniform_float32?4u:3u;if(uniform_word_count==needed){if(uniform_index<96){if(uniform_float32){for(unsigned i=0;i<4;++i)uniforms[uniform_index][3-i]=std::bit_cast<float>(uniform_words[i]);}else{const std::uint64_t low=std::uint64_t(uniform_words[0])|(std::uint64_t(uniform_words[1])<<32);const std::uint64_t high=uniform_words[2];const std::uint32_t components[4]{std::uint32_t((high>>16)&0xffffffu),std::uint32_t(((high&0xffffu)<<8)|(low>>56)),std::uint32_t((low>>32)&0xffffffu),std::uint32_t(low&0xffffffu)};for(unsigned i=0;i<4;++i)uniforms[uniform_index][i]=decode_f24(components[i]);}}++uniform_index;uniform_word_count=0;}}
 else if((id==0x23c||id==0x23d)&&current){const auto slot=id-0x23cu;const auto size=registers[0x238u+slot];const auto encoded=registers[0x23au+slot];if(size&&size<=0x20000u)decode_command_list(gpu_to_virtual(encoded<<3),size<<3,command_depth+1);}
-if((id==0x22e||id==0x22f)&&current){++stats.draw_calls;if(id==0x22e&&execute_draw_arrays())++stats.draws_rendered;else ++stats.draws_unsupported;}
+if((id==0x22e||id==0x22f)&&current){++stats.draw_calls;if(execute_draw(id==0x22f))++stats.draws_rendered;else ++stats.draws_unsupported;}
 }
 std::uint32_t decode_pixel(std::uint32_t address,std::uint32_t format){
  const auto mapped=map_memory(address,4);if(mapped.empty())return 0xff000000u;
@@ -71,7 +73,7 @@ void encode_pixel(std::span<std::byte> mapped,std::uint32_t rgba,std::uint32_t f
  std::memcpy(mapped.data(),&value,2);
 }
 }
-void pica200_reset(std::span<std::byte> m) noexcept{memory=m;vram={};registers={};framebuffers={};stats={};shader_code={};shader_descriptors={};uniforms={};code_index=descriptor_index=uniform_index=uniform_word_count=0;uniform_words={};uniform_float32=false;}
+void pica200_reset(std::span<std::byte> m) noexcept{memory=m;vram={};registers={};framebuffers={};render_target={};stats={};last_presented_generation=0;shader_code={};shader_descriptors={};uniforms={};code_index=descriptor_index=uniform_index=uniform_word_count=0;uniform_words={};uniform_float32=false;}
 bool pica200_decode_command_list(std::uint32_t address,std::uint32_t size) noexcept{
  return decode_command_list(address,size,0);
 }
@@ -110,13 +112,15 @@ bool pica200_display_transfer(std::uint32_t source,std::uint32_t destination,std
  const auto size=std::uint64_t(input_width)*input_height*input_bpp;if(size>0xffffffffu)return false;
  return pica200_transfer(source,destination,std::uint32_t(size));
 }
-void pica200_set_framebuffer(unsigned screen,std::uint32_t address,std::uint32_t stride,std::uint32_t format) noexcept{if(screen<2)framebuffers[screen]={address,stride,format,true};}
-bool pica200_present(unsigned screen,std::span<std::uint32_t> out,unsigned width,unsigned height) noexcept{
- if(screen>=2||out.size()<std::size_t(width)*height||!framebuffers[screen].valid)return false;const auto fb=framebuffers[screen];const unsigned source_width=screen?320u:400u,source_height=240u,bpp=bytes_per_pixel(fb.format),stride=fb.stride?fb.stride:source_width*bpp;
- if(map_memory(fb.address,std::uint64_t(stride)*source_height).empty())return false;
- for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){const auto sx=x*source_width/std::max(width,1u),sy=y*source_height/std::max(height,1u);out[std::size_t(y)*width+x]=decode_pixel(fb.address+sy*stride+sx*bpp,fb.format);}
+void pica200_set_framebuffer(unsigned screen,std::uint32_t address,std::uint32_t stride,std::uint32_t format) noexcept{if(screen<2)framebuffers[screen]={address,stride,format,screen?320u:400u,240u,false,true};}
+bool pica200_present(unsigned screen,std::span<std::uint32_t> out,unsigned width,unsigned height,std::uint64_t* generation) noexcept{
+ if(screen>=2||out.size()<std::size_t(width)*height)return false;auto fb=framebuffers[screen];if(!fb.valid&&screen==0)fb=render_target;if(!fb.valid)return false;const auto bpp=bytes_per_pixel(fb.format),stride=fb.stride?fb.stride:fb.width*bpp;
+ if(map_memory(fb.address,std::uint64_t(stride)*fb.height).empty())return false;
+ for(unsigned y=0;y<height;++y)for(unsigned x=0;x<width;++x){unsigned sx{},sy{};if(fb.rotate){sx=y*std::min(fb.width,240u)/std::max(height,1u);const auto logical_height=std::min(fb.height,400u);sy=logical_height-1u-x*logical_height/std::max(width,1u);}else{sx=x*fb.width/std::max(width,1u);sy=y*fb.height/std::max(height,1u);}out[std::size_t(y)*width+x]=decode_pixel(fb.address+sy*stride+sx*bpp,fb.format);}
+ if(generation)*generation=stats.framebuffer_generation;
  return true;
 }
+void pica200_note_presented(std::uint64_t generation) noexcept{if(generation&&generation!=last_presented_generation){last_presented_generation=generation;++stats.presented_frames;}}
 Pica200Snapshot pica200_snapshot() noexcept{return stats;}
 
 namespace {
@@ -181,24 +185,26 @@ bool pica200_run_vertex_shader(std::span<const PicaVec4> input,PicaVertexOutput&
  }
  return pica_rasterize_triangle(vertices,target,state);
 }namespace {
-bool execute_draw_arrays() noexcept{
+bool execute_draw(bool indexed) noexcept{
  // This intentionally narrow path accepts one float4 position stream, plain
  // triangle lists, an RGBA8 linear target, and no fragment side effects.
  if((registers[0x202]>>16)!=0 || registers[0x201]!=0x0fu ||
     registers[0x204]!=0 || registers[0x205]!=((1u<<28)|(16u<<16)) ||
-    (registers[0x25e]&0x300u)!=0 || registers[0x229]!=0)return false;
+    (registers[0x25e]&0x300u)!=0 || registers[0x229]!=0){++stats.rejected_state;return false;}
  const auto count=registers[0x228], first=registers[0x22a];
- if(count<3||count>4096||count%3u)return false;
+ if(count<3||count>4096||count%3u){++stats.rejected_state;return false;}
  const auto width=registers[0x11e]&0x7ffu,height=((registers[0x11e]>>12)&0x3ffu)+1u;
- if(!width||width>1024||height>1024)return false;
+ if(!width||width>1024||height>1024){++stats.rejected_bounds;return false;}
  const auto color_format=(registers[0x117]>>16)&7u,color_bpp=bytes_per_pixel(color_format);
- if(color_format>4)return false;
+ if(color_format>4){++stats.rejected_state;return false;}
  const std::uint32_t color_address=gpu_to_virtual((registers[0x11d]&0x0fffffffu)<<3);
  const std::uint32_t vertex_address=gpu_to_virtual((registers[0x200]&0x1fffffffu)<<3)+registers[0x203];
  const auto pixel_count=std::uint64_t(width)*height;
  auto color=map_memory(color_address,pixel_count*color_bpp);
- auto vertices=map_memory(vertex_address,(std::uint64_t(first)+count)*16);
- if(color.empty()||vertices.empty())return false;
+ auto vertices=indexed?map_memory(vertex_address,16):map_memory(vertex_address,(std::uint64_t(first)+count)*16);
+ const auto index_offset=registers[0x227]&0x7fffffffu,index_size=(registers[0x227]>>31)?2u:1u;
+ auto indices=indexed?map_memory(vertex_address+index_offset,std::uint64_t(first+count)*index_size):std::span<std::byte>{};
+ if(color.empty()||vertices.empty()||(indexed&&indices.empty())){++stats.rejected_bounds;return false;}
  std::vector<std::uint32_t> pixels(static_cast<std::size_t>(pixel_count));
  for(std::size_t i=0;i<pixels.size();++i)pixels[i]=decode_pixel(color_address+std::uint32_t(i*color_bpp),color_format);
  std::vector<float> depth(pixels.size(),1.f);
@@ -207,10 +213,11 @@ bool execute_draw_arrays() noexcept{
  PicaRasterState state{};
  std::array<PicaRasterVertex,3> triangle{};
  for(std::uint32_t i=0;i<count;++i){
+  std::uint32_t vertex_index=first+i;if(indexed){if(index_size==2){std::uint16_t value{};std::memcpy(&value,indices.data()+std::uint64_t(first+i)*2,2);vertex_index=value;}else vertex_index=std::to_integer<std::uint8_t>(indices[first+i]);}
   PicaVec4 position{};
-  std::memcpy(position.data(),vertices.data()+(std::uint64_t(first)+i)*16,16);
+  const auto vertex_bytes=map_memory(vertex_address+std::uint64_t(vertex_index)*16,16);if(vertex_bytes.empty()){++stats.rejected_bounds;return false;}std::memcpy(position.data(),vertex_bytes.data(),16);
   PicaVertexOutput output{};
-  if(!pica200_run_vertex_shader(std::span<const PicaVec4>(&position,1),output))return false;
+  if(!pica200_run_vertex_shader(std::span<const PicaVec4>(&position,1),output)){++stats.rejected_shader;return false;}
   auto& vertex=triangle[i%3];vertex.clip={0.f,0.f,0.f,1.f};vertex.color={1.f,1.f,1.f,1.f};
   const auto output_count=std::min(registers[0x4f]&7u,7u);
   if(!output_count)vertex.clip=output.registers[0];
@@ -218,9 +225,10 @@ bool execute_draw_arrays() noexcept{
   // MK7's early 2D scene producer uses an orthographic path whose final W
   // normalization is performed by PICA fixed-function state not yet modeled.
   if(vertex.clip[3]==0.f&&std::isfinite(vertex.clip[0])&&std::isfinite(vertex.clip[1]))vertex.clip[3]=1.f;
-  if(i%3==2&&!pica_rasterize_triangle(triangle,target,state))return false;
+  if(i%3==2&&!pica_rasterize_triangle(triangle,target,state)){++stats.rejected_raster;return false;}
  }
- for(std::size_t i=0;i<pixels.size();++i)encode_pixel(color.subspan(i*color_bpp,color_bpp),pixels[i],color_format);
+ std::uint64_t changed{};for(std::size_t i=0;i<pixels.size();++i)if(decode_pixel(color_address+std::uint32_t(i*color_bpp),color_format)!=pixels[i]){++changed;encode_pixel(color.subspan(i*color_bpp,color_bpp),pixels[i],color_format);}
+ if(changed){++stats.pixel_producing_draws;stats.changed_pixels+=changed;++stats.framebuffer_generation;render_target={color_address,width*color_bpp,color_format,width,height,width<=256u&&height>=400u,true};}
  return true;
 }
 }

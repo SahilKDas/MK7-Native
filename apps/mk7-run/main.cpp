@@ -6,6 +6,7 @@
 #include <mk7/recomp/pica200.hpp>
 #include <mk7/host/application.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cctype>
 #include <cstddef>
@@ -47,7 +48,10 @@ struct Options {
     std::filesystem::path mii_bridge;
     std::filesystem::path mii_profile;
     std::filesystem::path save_root;
+    std::filesystem::path dump_frame;
     std::uint64_t headless_slices{};
+    std::uint64_t input_at_slice{~0ull};
+    std::uint32_t input_buttons{};
 };
 
 class TempDirectory {
@@ -130,6 +134,12 @@ private:
         } else if (std::string_view{argv[index]} == "--headless-slices" && index + 1 < argc) {
             options.headless_slices = std::stoull(argv[++index]);
             if (!options.headless_slices) throw std::runtime_error{"headless slice count must be positive"};
+        } else if (std::string_view{argv[index]} == "--dump-frame" && index + 1 < argc) {
+            options.dump_frame = argv[++index];
+        } else if (std::string_view{argv[index]} == "--input-at-slice" && index + 1 < argc) {
+            options.input_at_slice = std::stoull(argv[++index], nullptr, 0);
+        } else if (std::string_view{argv[index]} == "--input-buttons" && index + 1 < argc) {
+            options.input_buttons = static_cast<std::uint32_t>(std::stoull(argv[++index], nullptr, 0));
         } else {
             throw std::runtime_error{"unknown argument: " + std::string{argv[index]}};
         }
@@ -138,6 +148,32 @@ private:
         throw std::runtime_error{"choose either --shared-data-romfs or --shared-data-cia"};
     }
     return options;
+}
+
+[[nodiscard]] auto dump_guest_frame(const std::filesystem::path& path) -> std::uint64_t {
+    constexpr unsigned width = 400, height = 480;
+    std::vector<std::uint32_t> top(400u * 240u), bottom(320u * 240u);
+    std::uint64_t top_generation{}, bottom_generation{};
+    if (!pica200_present(0, top, 400, 240, &top_generation))
+        throw std::runtime_error{"guest top framebuffer is not ready"};
+    pica200_present(1, bottom, 320, 240, &bottom_generation);
+    std::vector<std::uint32_t> frame(width * height, 0xff000000u);
+    std::copy(top.begin(), top.end(), frame.begin());
+    for (unsigned y = 0; y < 240; ++y) {
+        std::copy_n(bottom.begin() + y * 320u, 320u, frame.begin() + (y + 240u) * width + 40u);
+    }
+    if (!path.parent_path().empty()) std::filesystem::create_directories(path.parent_path());
+    std::ofstream output{path, std::ios::binary};
+    if (!output) throw std::runtime_error{"unable to create frame dump: " + path.string()};
+    output << "P6\n" << width << ' ' << height << "\n255\n";
+    std::uint64_t checksum = 1469598103934665603ull;
+    for (const auto pixel : frame) for (unsigned shift : {0u, 8u, 16u}) {
+        const auto byte = static_cast<char>((pixel >> shift) & 0xffu);
+        output.put(byte); checksum = (checksum ^ static_cast<unsigned char>(byte)) * 1099511628211ull;
+    }
+    if (!output) throw std::runtime_error{"failed writing frame dump: " + path.string()};
+    pica200_note_presented(std::max(top_generation, bottom_generation));
+    return checksum;
 }
 
 #ifdef _WIN32
@@ -348,11 +384,17 @@ auto main(int argc, char** argv) -> int {
         }
         if (options.headless_slices) {
             for (std::uint64_t slice = 0; slice < options.headless_slices && !runtime_unwinding(); ++slice) {
+                if (slice == options.input_at_slice) ctr_runtime_set_input(options.input_buttons, 0.f, 0.f);
 #ifdef MK7_COMPACT_EXECUTION
                 ctr_compact_run_slice();
 #else
                 ctr_runtime_resume();
 #endif
+            }
+            if (!options.dump_frame.empty()) {
+                const auto checksum = dump_guest_frame(options.dump_frame);
+                std::cout << "[frame] path=" << options.dump_frame
+                          << ", fnv1a=0x" << std::hex << checksum << std::dec << '\n';
             }
             const auto progress = ctr_runtime_snapshot();
             const auto gpu = pica200_snapshot();
@@ -367,6 +409,14 @@ auto main(int argc, char** argv) -> int {
                       << ", last-reg=0x" << std::hex << gpu.last_register << std::dec
                       << ", draws=" << gpu.draw_calls
                       << ", rendered=" << gpu.draws_rendered
+                      << ", pixel-draws=" << gpu.pixel_producing_draws
+                      << ", changed-pixels=" << gpu.changed_pixels
+                      << ", framebuffer-generation=" << gpu.framebuffer_generation
+                      << ", presented-frames=" << gpu.presented_frames
+                      << ", rejected={state:" << gpu.rejected_state
+                      << ",bounds:" << gpu.rejected_bounds
+                      << ",shader:" << gpu.rejected_shader
+                      << ",raster:" << gpu.rejected_raster << "}"
                       << ", r0=0x" << std::hex << g_cpu.R[0]
                       << ", r1=0x" << g_cpu.R[1]
                       << ", r4=0x" << g_cpu.R[4]
@@ -413,6 +463,9 @@ auto main(int argc, char** argv) -> int {
                       << ", last-reg=0x" << std::hex << gpu.last_register << std::dec
                       << ", draws=" << gpu.draw_calls
                               << ", rendered=" << gpu.draws_rendered
+                              << ", pixel-draws=" << gpu.pixel_producing_draws
+                              << ", changed-pixels=" << gpu.changed_pixels
+                              << ", presented-frames=" << gpu.presented_frames
                       << ", r0=0x" << std::hex << g_cpu.R[0]
                       << ", r1=0x" << g_cpu.R[1]
                       << ", r4=0x" << g_cpu.R[4]
@@ -435,7 +488,8 @@ auto main(int argc, char** argv) -> int {
                   << "usage: mk7-run <game.cia> [--ctrtool path/to/ctrtool] "
                      "[--shared-data-romfs path/to/0004009B00010202.app.romfs | "
                      "--shared-data-cia path/to/0004009B00010202.cia] [--mii-bridge path/to/mk7-mii-bridge.exe] "
-                     "[--mii-profile path/to/player.mii.json] [--save-dir path] [--headless-slices N]\n";
+                     "[--mii-profile path/to/player.mii.json] [--save-dir path] [--headless-slices N] "
+                     "[--dump-frame path.ppm] [--input-at-slice N --input-buttons mask]\n";
         return 1;
     }
 }

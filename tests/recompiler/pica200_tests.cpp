@@ -86,6 +86,8 @@ int main(){
  assert(pica200_decode_command_list(0x600,draw_cursor-0x600));
  auto drawn=pica200_snapshot();
  assert(drawn.draw_calls==1&&drawn.draws_rendered==1&&drawn.draws_unsupported==0);
+ assert(drawn.pixel_producing_draws==1&&drawn.changed_pixels>0&&drawn.framebuffer_generation==1);
+ std::uint64_t generation{};std::array<std::uint32_t,64> presented{};assert(pica200_present(0,presented,8,8,&generation));assert(generation==1);pica200_note_presented(generation);assert(pica200_snapshot().presented_frames==1);
  std::uint32_t guest_pixel{};
  std::memcpy(&guest_pixel,memory.data()+0x4000+(4*8+4)*4,4);
  assert(guest_pixel==0xffffffffu);
@@ -94,4 +96,8 @@ int main(){
  assert(pica200_decode_command_list(draw_cursor-16,16));
  drawn=pica200_snapshot();
  assert(drawn.draw_calls==2&&drawn.draws_rendered==1&&drawn.draws_unsupported==1);
+ const std::uint8_t indices[3]{0,1,2};std::memcpy(memory.data()+0x5030,indices,sizeof(indices));
+ gpu_write(draw_cursor,0x201,0x0f);gpu_write(draw_cursor,0x227,0x30);gpu_write(draw_cursor,0x22f,1);
+ assert(pica200_decode_command_list(draw_cursor-24,24));drawn=pica200_snapshot();
+ assert(drawn.draw_calls==3&&drawn.draws_rendered==2);
 }
