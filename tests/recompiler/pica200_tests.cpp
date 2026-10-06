@@ -13,6 +13,17 @@ int main(){
  assert(pica200_decode_command_list(0x100,16));auto state=pica200_snapshot();
  assert(state.command_lists==1&&state.register_writes==2&&state.draw_calls==1&&state.last_register==0x22e);
  assert(pica200_memory_fill(0x1000,0x1010,0xff336699,2));for(unsigned i=0;i<16;i+=4){std::uint32_t value{};std::memcpy(&value,memory.data()+0x1000+i,4);assert(value==0xff336699);}
+ assert(pica200_memory_fill(0x1f000000,0x1f000010,0xff224466,2));
+ assert(pica200_transfer(0x1f000000,0x2100,16));for(unsigned i=0;i<16;i+=4){std::uint32_t value{};std::memcpy(&value,memory.data()+0x2100+i,4);assert(value==0xff224466);}
+ assert(pica200_display_transfer(0x2100,0x1f000100,2u<<16|2u,2u<<16|2u,0));
+ pica200_set_framebuffer(1,0x1f000100,8,0);std::array<std::uint32_t,4> vram_output{};assert(pica200_present(1,vram_output,2,2));assert(vram_output[0]==0xff224466);
+ const std::uint32_t nested_parameter=0xa5a55a5au,nested_header=0x000f0041u;
+ std::memcpy(memory.data()+0x2200,&nested_parameter,4);std::memcpy(memory.data()+0x2204,&nested_header,4);
+ assert(pica200_transfer(0x2200,0x1f000200,8));
+ const std::uint32_t indirect_words[6]{1u,0x000f0238u,0x03000040u,0x000f023au,1u,0x000f023cu};
+ std::memcpy(memory.data()+0x2300,indirect_words,sizeof(indirect_words));
+ const auto before_indirect=pica200_snapshot();assert(pica200_decode_command_list(0x2300,sizeof(indirect_words)));
+ const auto after_indirect=pica200_snapshot();assert(after_indirect.command_lists==before_indirect.command_lists+2&&after_indirect.last_register==0x41u&&after_indirect.last_value==nested_parameter);
  const std::uint32_t pixels[4]{0xff0000ff,0xff00ff00,0xffff0000,0xffffffff};std::memcpy(memory.data()+0x2000,pixels,sizeof(pixels));
  pica200_set_framebuffer(0,0x2000,8,0);std::array<std::uint32_t,1> output{};assert(pica200_present(0,output,1,1));assert(output[0]==pixels[0]);
  auto gpu_write=[&](unsigned& cursor,std::uint32_t reg,std::uint32_t value){const std::uint32_t header=reg|0x000f0000u;std::memcpy(memory.data()+cursor,&value,4);std::memcpy(memory.data()+cursor+4,&header,4);cursor+=8;};

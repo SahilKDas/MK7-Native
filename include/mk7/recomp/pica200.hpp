@@ -14,6 +14,8 @@ struct Pica200Snapshot {
 void pica200_reset(std::span<std::byte> memory) noexcept;
 bool pica200_decode_command_list(std::uint32_t address,std::uint32_t size) noexcept;
 bool pica200_memory_fill(std::uint32_t start,std::uint32_t end,std::uint32_t value,std::uint16_t control) noexcept;
+bool pica200_transfer(std::uint32_t source,std::uint32_t destination,std::uint32_t size) noexcept;
+bool pica200_display_transfer(std::uint32_t source,std::uint32_t destination,std::uint32_t input_dimensions,std::uint32_t output_dimensions,std::uint32_t flags) noexcept;
 void pica200_set_framebuffer(unsigned screen,std::uint32_t address,std::uint32_t stride,std::uint32_t format) noexcept;
 bool pica200_present(unsigned screen,std::span<std::uint32_t> rgba,unsigned width,unsigned height) noexcept;
 bool pica200_run_vertex_shader(std::span<const PicaVec4> inputs,PicaVertexOutput& output) noexcept;
