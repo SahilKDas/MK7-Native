@@ -56,6 +56,18 @@ int main(){
  assert(pica200_decode_command_list(cursor-40,40));
  assert(pica200_run_vertex_shader(std::span<const PicaVec4>(&vertex,1),shaded));
  assert(shaded.registers[0][0]==vertex[1]&&shaded.registers[0][1]==0.f);
+ const auto uniform_cursor=cursor;
+ const std::uint32_t packed_f24[3]{0x00410000u,0x00004080u,0x3f000040u};
+ gpu_write(cursor,0x2c0,0);
+ for(const auto word:packed_f24)gpu_write(cursor,0x2c1,word);
+ gpu_write(cursor,0x2cb,0);
+ gpu_write(cursor,0x2cc,(0x13u<<26)|(32u<<12));
+ gpu_write(cursor,0x2cc,0x22u<<26);
+ gpu_write(cursor,0x2d5,0);
+ gpu_write(cursor,0x2d6,0x0000036fu);
+ assert(pica200_decode_command_list(uniform_cursor,cursor-uniform_cursor));
+ assert(pica200_run_vertex_shader({},shaded));
+ assert(shaded.registers[0][0]==1.f&&shaded.registers[0][1]==2.f&&shaded.registers[0][2]==3.f&&shaded.registers[0][3]==4.f);
  assert(!pica200_decode_command_list(0x7ffc,16));
  gpu_write(cursor,0x2cb,0);gpu_write(cursor,0x2cc,0x10u<<26);
  assert(pica200_decode_command_list(cursor-16,16));

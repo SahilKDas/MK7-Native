@@ -410,6 +410,7 @@ auto main(int argc, char** argv) -> int {
                       << ", draws=" << gpu.draw_calls
                       << ", rendered=" << gpu.draws_rendered
                       << ", pixel-draws=" << gpu.pixel_producing_draws
+                      << ", textured-draws=" << gpu.textured_draws
                       << ", changed-pixels=" << gpu.changed_pixels
                       << ", framebuffer-generation=" << gpu.framebuffer_generation
                       << ", presented-frames=" << gpu.presented_frames
@@ -417,6 +418,20 @@ auto main(int argc, char** argv) -> int {
                       << ",bounds:" << gpu.rejected_bounds
                       << ",shader:" << gpu.rejected_shader
                       << ",raster:" << gpu.rejected_raster << "}"
+                      << ", texture={config:0x" << std::hex << gpu.last_texture_config
+                      << ",dim:0x" << gpu.last_texture_dimensions
+                      << ",format:0x" << gpu.last_texture_format
+                      << ",address:0x" << gpu.last_texture_address
+                      << ",source:0x" << gpu.last_tev_source
+                      << ",combine:0x" << gpu.last_tev_combiner << std::dec << "}"
+                      << ", tev=[";
+            for (unsigned stage=0;stage<6;++stage) std::cout << (stage?",":"") << std::hex << gpu.last_tev_sources[stage] << '/' << gpu.last_tev_operands[stage] << '/' << gpu.last_tev_combiners[stage] << '/' << gpu.last_tev_colors[stage] << '/' << gpu.last_tev_scales[stage];
+            std::cout << std::dec << "]"
+                      << ", input-pos=[" << gpu.last_input_position[0] << ',' << gpu.last_input_position[1] << ',' << gpu.last_input_position[2] << ',' << gpu.last_input_position[3] << ']'
+                      << ", clip-pos=[" << gpu.last_clip_position[0] << ',' << gpu.last_clip_position[1] << ',' << gpu.last_clip_position[2] << ',' << gpu.last_clip_position[3] << ']'
+                      << ", shader={entry:" << gpu.last_shader_entry << ",outputs:" << gpu.last_output_count << '}';
+            for(unsigned slot=0;slot<gpu.last_output_count;++slot)std::cout << ", o" << slot << "@0x" << std::hex << gpu.last_output_mappings[slot] << std::dec << "=[" << gpu.last_shader_outputs[slot][0] << ',' << gpu.last_shader_outputs[slot][1] << ',' << gpu.last_shader_outputs[slot][2] << ',' << gpu.last_shader_outputs[slot][3] << ']';
+            std::cout
                       << ", r0=0x" << std::hex << g_cpu.R[0]
                       << ", r1=0x" << g_cpu.R[1]
                       << ", r4=0x" << g_cpu.R[4]

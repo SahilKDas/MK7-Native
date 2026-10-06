@@ -42,6 +42,15 @@ int main(){
  for(auto& vertex:triangle){vertex.color={1,1,1,1};vertex.uv={.25f,.25f};}
  assert(pica_rasterize_triangle(triangle,target,state));
  assert(rgba[4*8+4]==0xff0000ffu);
+ state.tev_enable=true;
+ state.tev[0].source=0x00300030u;
+ state.tev[0].combiner=0x00010001u;
+ for(unsigned stage=1;stage<6;++stage)state.tev[stage].source=0x0fff0fffu;
+ for(auto& vertex:triangle)vertex.color={.5f,1.f,1.f,.5f};
+ assert(pica_rasterize_triangle(triangle,target,state));
+ const auto combined=rgba[4*8+4];
+ assert((combined&255u)>=126u&&(combined&255u)<=129u);
+ assert(((combined>>24)&255u)>=126u&&((combined>>24)&255u)<=129u);
  state.texture.rgba={};
  assert(!pica_rasterize_triangle(triangle,target,state));
 }
