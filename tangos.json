@@ -1,0 +1,175 @@
+{
+  "$schema": "https://tangos.dev/schema/tangos.schema.json",
+  "tangosVersion": "1",
+  "project": {
+    "name": "MK7-Native",
+    "title": "Mario Kart 7 Native",
+    "tagline": "Clean-room native PC runtime for user-supplied Mario Kart 7 data",
+    "github": "https://github.com/SahilKDas/MK7-Native",
+    "language": "C++",
+    "platform": "Nintendo 3DS / ARM11 / PICA200 to Windows / Vulkan",
+    "compiler": "C++23 or newer through CMake and Ninja",
+    "setup": "Initialize the pinned submodules, configure the default CMake preset, and build it. Supply legally dumped game data only as external paths.",
+    "readFirst": "README.md and docs/RECOMPILATION.md",
+    "rules": "Never commit ROMs, extracted assets, keys, generated game code, frame captures, or other copyrighted game data. Clean-room implementation uses public hardware documentation and locally supplied dumps.",
+    "submitting": "Run the default test preset and the focused PICA tests. Real-ROM findings must be recorded as metadata or reproducible behavior, never copied game content.",
+    "knownWalls": "A draw count is not a visual milestone. Require a completed guest framebuffer, nonzero changed pixels, a non-diagnostic capture, matching presented checksum, and an input-driven frame change. Unknown indirect branches fail closed.",
+    "nearMissNote": "Record unsupported instructions, shader opcodes, PICA registers, and rejected draw reasons explicitly instead of adding compatibility approximations."
+  },
+  "runtime": {
+    "cwd": ".",
+    "shell": false
+  },
+  "requirements": {
+    "rom": true,
+    "compiler": "CMake 3.25+, Ninja, Vulkan SDK, and a C++23-capable compiler",
+    "notes": "ctrtool is needed for a real-ROM run. The CIA and optional shared-data RomFS/CIA remain outside this repository. tangOS is an optional project console and is not linked into MK7-Native."
+  },
+  "categories": [
+    {
+      "id": "build",
+      "label": "Build",
+      "order": 10,
+      "description": "Configure and compile the native runtime."
+    },
+    {
+      "id": "verify",
+      "label": "Verify",
+      "order": 20,
+      "description": "Run synthetic and regression checks."
+    },
+    {
+      "id": "runtime",
+      "label": "Runtime",
+      "order": 30,
+      "description": "Inspect or execute user-supplied game data in place."
+    }
+  ],
+  "tools": [
+    {
+      "id": "configure",
+      "label": "Configure development build",
+      "category": "build",
+      "description": "Configure build/default with the checked-in CMake preset.",
+      "readOnly": false,
+      "command": "cmake --preset default"
+    },
+    {
+      "id": "build",
+      "label": "Build MK7-Native",
+      "category": "build",
+      "description": "Compile the default development build.",
+      "readOnly": false,
+      "command": "cmake --build --preset default {flags}",
+      "longRunning": true,
+      "needs": ["compiler"],
+      "args": [
+        {
+          "name": "jobs",
+          "type": "integer",
+          "flag": "--parallel",
+          "description": "Optional maximum number of parallel build jobs."
+        }
+      ]
+    },
+    {
+      "id": "test",
+      "label": "Run regression suite",
+      "category": "verify",
+      "description": "Run the complete configured CTest suite and show failures.",
+      "readOnly": true,
+      "command": "ctest --preset default --output-on-failure",
+      "longRunning": true,
+      "needs": ["compiler"]
+    },
+    {
+      "id": "test_pica",
+      "label": "Run PICA200 tests",
+      "category": "verify",
+      "description": "Run the focused shader, command decoder, and rasterizer tests.",
+      "readOnly": true,
+      "command": "ctest --test-dir build/default -C Debug -R pica --output-on-failure",
+      "needs": ["compiler"]
+    },
+    {
+      "id": "inspect_file",
+      "label": "Inspect Nintendo file",
+      "category": "runtime",
+      "description": "Inspect the signature and recognized format of one local file without modifying it.",
+      "readOnly": true,
+      "command": "build/default/mk7-inspect.exe {flags}",
+      "args": [
+        {
+          "name": "path",
+          "type": "string",
+          "positional": true,
+          "required": true,
+          "description": "Absolute path to the file to inspect."
+        }
+      ]
+    },
+    {
+      "id": "run_acceptance",
+      "label": "Run real-ROM acceptance",
+      "category": "runtime",
+      "description": "Verify and run a legally dumped external CIA, optionally capture a deterministic PPM, and inject a scripted HID sample.",
+      "docs": "The ROM is read from its original path and is never copied into the repository. Omit headless_slices to open the Vulkan window; provide it for a bounded headless acceptance run.",
+      "readOnly": false,
+      "command": "build/default/mk7-run.exe {flags}",
+      "longRunning": true,
+      "needs": ["rom"],
+      "args": [
+        {
+          "name": "rom",
+          "type": "string",
+          "positional": true,
+          "required": true,
+          "description": "Absolute path to the legally dumped MK7 CIA."
+        },
+        {
+          "name": "ctrtool",
+          "type": "string",
+          "flag": "--ctrtool",
+          "required": true,
+          "description": "Absolute path to ctrtool.exe."
+        },
+        {
+          "name": "shared_data_romfs",
+          "type": "string",
+          "flag": "--shared-data-romfs",
+          "description": "Optional external 0004009B00010202 RomFS path."
+        },
+        {
+          "name": "headless_slices",
+          "type": "integer",
+          "flag": "--headless-slices",
+          "description": "Bounded number of guest scheduler slices; omit for the interactive Vulkan window."
+        },
+        {
+          "name": "dump_frame",
+          "type": "string",
+          "flag": "--dump-frame",
+          "description": "Optional output PPM path outside tracked source files."
+        },
+        {
+          "name": "input_at_slice",
+          "type": "integer",
+          "flag": "--input-at-slice",
+          "description": "Guest slice at which to inject scripted input."
+        },
+        {
+          "name": "input_buttons",
+          "type": "string",
+          "flag": "--input-buttons",
+          "description": "HID button mask paired with input_at_slice."
+        },
+        {
+          "name": "input_release_slice",
+          "type": "integer",
+          "flag": "--input-release-slice",
+          "description": "Guest slice at which to release scripted input and produce a complete button edge."
+        }
+      ]
+    }
+  ]
+}

@@ -51,6 +51,7 @@ struct Options {
     std::filesystem::path dump_frame;
     std::uint64_t headless_slices{};
     std::uint64_t input_at_slice{~0ull};
+    std::uint64_t input_release_slice{~0ull};
     std::uint32_t input_buttons{};
 };
 
@@ -140,6 +141,8 @@ private:
             options.input_at_slice = std::stoull(argv[++index], nullptr, 0);
         } else if (std::string_view{argv[index]} == "--input-buttons" && index + 1 < argc) {
             options.input_buttons = static_cast<std::uint32_t>(std::stoull(argv[++index], nullptr, 0));
+        } else if (std::string_view{argv[index]} == "--input-release-slice" && index + 1 < argc) {
+            options.input_release_slice = std::stoull(argv[++index], nullptr, 0);
         } else {
             throw std::runtime_error{"unknown argument: " + std::string{argv[index]}};
         }
@@ -385,6 +388,7 @@ auto main(int argc, char** argv) -> int {
         if (options.headless_slices) {
             for (std::uint64_t slice = 0; slice < options.headless_slices && !runtime_unwinding(); ++slice) {
                 if (slice == options.input_at_slice) ctr_runtime_set_input(options.input_buttons, 0.f, 0.f);
+                if (slice == options.input_release_slice) ctr_runtime_set_input(0, 0.f, 0.f);
 #ifdef MK7_COMPACT_EXECUTION
                 ctr_compact_run_slice();
 #else
@@ -413,11 +417,18 @@ auto main(int argc, char** argv) -> int {
                       << ", textured-draws=" << gpu.textured_draws
                       << ", changed-pixels=" << gpu.changed_pixels
                       << ", framebuffer-generation=" << gpu.framebuffer_generation
+                      << ", completed-generation=" << gpu.completed_framebuffer_generation
                       << ", presented-frames=" << gpu.presented_frames
                       << ", rejected={state:" << gpu.rejected_state
                       << ",bounds:" << gpu.rejected_bounds
                       << ",shader:" << gpu.rejected_shader
                       << ",raster:" << gpu.rejected_raster << "}"
+                      << ", reject-reasons={invalid-shader:" << gpu.rejected_invalid_shader_output
+                      << ",clipping:" << gpu.rejected_clipping
+                      << ",degenerate:" << gpu.rejected_degenerate
+                      << ",culling:" << gpu.rejected_culling
+                      << ",viewport-scissor:" << gpu.rejected_viewport_scissor
+                      << ",framebuffer:" << gpu.rejected_framebuffer << "}"
                       << ", texture={config:0x" << std::hex << gpu.last_texture_config
                       << ",dim:0x" << gpu.last_texture_dimensions
                       << ",format:0x" << gpu.last_texture_format
@@ -429,6 +440,9 @@ auto main(int argc, char** argv) -> int {
             std::cout << std::dec << "]"
                       << ", input-pos=[" << gpu.last_input_position[0] << ',' << gpu.last_input_position[1] << ',' << gpu.last_input_position[2] << ',' << gpu.last_input_position[3] << ']'
                       << ", clip-pos=[" << gpu.last_clip_position[0] << ',' << gpu.last_clip_position[1] << ',' << gpu.last_clip_position[2] << ',' << gpu.last_clip_position[3] << ']'
+                      << ", largest-uniform=c" << gpu.last_largest_uniform_index << "["
+                      << gpu.last_largest_uniform[0] << ',' << gpu.last_largest_uniform[1] << ','
+                      << gpu.last_largest_uniform[2] << ',' << gpu.last_largest_uniform[3] << ']'
                       << ", shader={entry:" << gpu.last_shader_entry << ",outputs:" << gpu.last_output_count << '}';
             for(unsigned slot=0;slot<gpu.last_output_count;++slot)std::cout << ", o" << slot << "@0x" << std::hex << gpu.last_output_mappings[slot] << std::dec << "=[" << gpu.last_shader_outputs[slot][0] << ',' << gpu.last_shader_outputs[slot][1] << ',' << gpu.last_shader_outputs[slot][2] << ',' << gpu.last_shader_outputs[slot][3] << ']';
             std::cout
@@ -504,7 +518,8 @@ auto main(int argc, char** argv) -> int {
                      "[--shared-data-romfs path/to/0004009B00010202.app.romfs | "
                      "--shared-data-cia path/to/0004009B00010202.cia] [--mii-bridge path/to/mk7-mii-bridge.exe] "
                      "[--mii-profile path/to/player.mii.json] [--save-dir path] [--headless-slices N] "
-                     "[--dump-frame path.ppm] [--input-at-slice N --input-buttons mask]\n";
+                     "[--dump-frame path.ppm] [--input-at-slice N --input-buttons mask "
+                     "--input-release-slice N]\n";
         return 1;
     }
 }

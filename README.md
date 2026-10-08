@@ -56,6 +56,18 @@ the Nintendo and Mario Kart 7 formats that will underpin the asset pipeline:
 See [Native coverage](docs/COVERAGE.md) for measured progress and [Static recompilation](docs/RECOMPILATION.md) for the local ROM-to-C++
 workflow, current architecture limits, and correctness gates.
 
+### Optional tangOS project console
+
+The root `tangos.json` exposes MK7-Native's existing configure, build, test,
+inspection, and real-ROM acceptance commands to
+[tangOS](https://github.com/tangosdev/tangOS). Open this repository in tangOS
+Console to use that catalog. tangOS remains optional orchestration: it is not an
+operating system, is not installed or linked by this project, and adds nothing
+to the native executable or its dependency footprint.
+
+The descriptor accepts absolute paths to locally dumped game data. It never
+places a CIA, extracted assets, or keys in the repository.
+
 The game CIA remains wherever the user stores it; pass its absolute path to
 `mk7-run`. MK7-Native never copies the full ROM into the source or build tree.
 The optional system shared-data RomFS is also streamed from its original path.

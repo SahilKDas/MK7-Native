@@ -32,11 +32,17 @@ supported shader-instruction subset and feeds selected output registers to
 that rasterizer. This bridge is for synthetic inputs; it does not decode guest
 vertex buffers or PICA output-map registers.
 
-This is not a complete PICA200 path. The CPU reference does not
-yet cover clipping, culling, scissor, alpha test, tiled texture formats,
-combiners, framebuffer format writes, logic operations, lighting/fog, geometry
-shaders, or the full shader ISA. It is not a Vulkan guest-triangle renderer.
-Unsupported state must not be represented as successful game rendering.
+The game draw path now decodes the common vertex-array base, all twelve loader
+descriptors, per-attribute formats and component counts, loader permutations,
+alignment and padding entries, independent offsets and strides, fixed f24
+attributes, and byte or short index buffers. It fails closed when a loader is
+malformed, duplicates an attribute, or leaves a required shader input absent.
+
+This is not a complete PICA200 path. Lighting, fog, procedural textures,
+geometry shaders, uncommon texture behavior, exact f24 arithmetic, and the full
+shader ISA remain incomplete. Guest triangles are still rasterized by the CPU;
+Vulkan presents completed guest framebuffers. Unsupported state must not be
+represented as successful game rendering.
 ## Hardware facts to build against
 
 | Stage | Publicly documented behavior | Boundary needing verification |
